@@ -24,6 +24,11 @@ Thumbs.db
 .vscode/
 *.iml
 
+# ── Google OAuth credentials (never commit) ──────────────────────
+client_secret*.json
+DBpassword.txt
+*.password.txt
+
 # ── Planning / docs / reference (never commit these) ─────────────
 CLAUDE.md
 DONE.md
