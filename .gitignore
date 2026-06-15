@@ -1,0 +1,38 @@
+# ── Java / Spring Boot ──────────────────────────────────────────
+backend/target/
+*.class
+*.jar
+*.war
+
+# ── Node / React ─────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+
+# ── Environment / secrets ────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── OS ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ──────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+
+# ── Planning / docs / reference (never commit these) ─────────────
+CLAUDE.md
+DONE.md
+SPEC.md
+STACK.md
+TODAY.md
+project_conversation_context.md
+tasks/
+learning-docs/
+mockups/
+dsamind/
+foundation files/
