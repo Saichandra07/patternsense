@@ -11,13 +11,16 @@ interface Props {
 export default function OnboardingMode({ onDone, onBack }: Props) {
   const [selected, setSelected] = useState<'guided' | 'self_directed' | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleContinue(mode: 'guided' | 'self_directed') {
     setLoading(true)
+    setError('')
     try {
       await api.patch('/api/users/mode', { mode })
       onDone(mode)
-    } finally {
+    } catch {
+      setError('Failed to save your selection. Please try again.')
       setLoading(false)
     }
   }
@@ -32,7 +35,6 @@ export default function OnboardingMode({ onDone, onBack }: Props) {
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-16">
 
-        {/* Step indicator */}
         <div className="flex items-center gap-2 mb-12">
           <div className="flex items-center gap-1.5 text-sm">
             <div className="w-6 h-6 rounded-full bg-success flex items-center justify-center text-white text-xs font-semibold">✓</div>
@@ -52,14 +54,16 @@ export default function OnboardingMode({ onDone, onBack }: Props) {
         <h1 className="text-ink text-3xl font-bold mb-2.5 text-center">How do you want to learn?</h1>
         <p className="text-ink-secondary text-sm mb-11 text-center">You can always switch later from your settings.</p>
 
-        {/* Mode cards */}
+        {error && <p className="text-warning text-sm mb-6">{error}</p>}
+
         <div className="flex gap-5 w-full max-w-3xl mb-6">
-          {/* Guided */}
-          <button
+
+          {/* Guided card */}
+          <div
             onClick={() => setSelected('guided')}
             className="flex-1 text-left rounded-2xl p-8 transition-all duration-200 cursor-pointer"
             style={{
-              background: selected === 'guided' ? 'rgba(124,58,237,0.06)' : 'var(--color-surface, #111118)',
+              background: selected === 'guided' ? 'rgba(124,58,237,0.06)' : '#111118',
               border: selected === 'guided' ? '2px solid #7C3AED' : '2px solid #232330',
             }}
           >
@@ -83,7 +87,7 @@ export default function OnboardingMode({ onDone, onBack }: Props) {
               <button
                 onClick={e => { e.stopPropagation(); handleContinue('guided') }}
                 disabled={loading}
-                className="w-full py-3 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
+                className="w-full py-3 rounded-lg text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={selected === 'guided'
                   ? { background: '#7C3AED', color: '#fff', border: '1px solid #7C3AED' }
                   : { background: '#18181F', color: '#8B879E', border: '1px solid #232330' }}
@@ -91,14 +95,14 @@ export default function OnboardingMode({ onDone, onBack }: Props) {
                 {loading && selected === 'guided' ? 'Saving…' : 'Start with a roadmap →'}
               </button>
             </div>
-          </button>
+          </div>
 
-          {/* Self-directed */}
-          <button
+          {/* Self-directed card */}
+          <div
             onClick={() => setSelected('self_directed')}
             className="flex-1 text-left rounded-2xl p-8 transition-all duration-200 cursor-pointer"
             style={{
-              background: selected === 'self_directed' ? 'rgba(124,58,237,0.06)' : 'var(--color-surface, #111118)',
+              background: selected === 'self_directed' ? 'rgba(124,58,237,0.06)' : '#111118',
               border: selected === 'self_directed' ? '2px solid #7C3AED' : '2px solid #232330',
             }}
           >
@@ -122,7 +126,7 @@ export default function OnboardingMode({ onDone, onBack }: Props) {
               <button
                 onClick={e => { e.stopPropagation(); handleContinue('self_directed') }}
                 disabled={loading}
-                className="w-full py-3 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
+                className="w-full py-3 rounded-lg text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={selected === 'self_directed'
                   ? { background: '#7C3AED', color: '#fff', border: '1px solid #7C3AED' }
                   : { background: '#18181F', color: '#8B879E', border: '1px solid #232330' }}
@@ -130,7 +134,7 @@ export default function OnboardingMode({ onDone, onBack }: Props) {
                 {loading && selected === 'self_directed' ? 'Saving…' : 'Bring my own problems →'}
               </button>
             </div>
-          </button>
+          </div>
         </div>
 
         <p className="text-ink-muted text-sm text-center">
