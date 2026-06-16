@@ -1,0 +1,86 @@
+package com.patternsense.backend.controller;
+
+import com.patternsense.backend.service.SessionService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/session")
+@RequiredArgsConstructor
+public class SessionController {
+
+    private final SessionService sessionService;
+
+    @PostMapping("/start")
+    public ResponseEntity<Map<String, Object>> start(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody Map<String, String> body) {
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            String url = body.get("url");
+            if (url == null || url.isBlank())
+                return ResponseEntity.badRequest().body(Map.of("error", "url is required"));
+            return ResponseEntity.ok(sessionService.startSession(userId, url));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{sessionId}/message")
+    public ResponseEntity<Map<String, Object>> message(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId,
+            @RequestBody Map<String, String> body) {
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            String content = body.get("content");
+            if (content == null || content.isBlank())
+                return ResponseEntity.badRequest().body(Map.of("error", "content is required"));
+            return ResponseEntity.ok(sessionService.sendMessage(userId, sessionId, content));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{sessionId}/end")
+    public ResponseEntity<Map<String, Object>> end(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId) {
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            return ResponseEntity.ok(sessionService.endSession(userId, sessionId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{sessionId}/stuck")
+    public ResponseEntity<Map<String, Object>> stuck(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId) {
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            return ResponseEntity.ok(sessionService.stuck(userId, sessionId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+}
