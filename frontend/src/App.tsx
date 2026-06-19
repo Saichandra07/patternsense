@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from './lib/supabase'
 import api from './lib/api'
 import Landing from './pages/Landing'
@@ -6,21 +6,27 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import OnboardingKey from './pages/OnboardingKey'
 import OnboardingMode from './pages/OnboardingMode'
-import Nav from './components/Nav'
+import Home from './pages/Home'
+import SessionPage from './pages/SessionPage'
 import LoadingScreen from './components/LoadingScreen'
 import type { Session } from '@supabase/supabase-js'
 
-type Screen = 'loading' | 'landing' | 'login' | 'signup' | 'onboarding-key' | 'onboarding-mode' | 'app'
+type Screen = 'loading' | 'landing' | 'login' | 'signup' | 'onboarding-key' | 'onboarding-mode' | 'home' | 'session'
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [screen, setScreen] = useState<Screen>('loading')
   const [userMode, setUserMode] = useState<string | null>(null)
+  const [sessionUrl, setSessionUrl] = useState<string>('')
+  const isInitialized = useRef(false)
 
   useEffect(() => {
+    // Initial load — check existing session once
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
-      if (!session) {
+      if (session) {
+        initUser()
+      } else {
         const path = window.location.pathname
         if (path === '/signup') setScreen('signup')
         else if (path === '/login') setScreen('login')
@@ -28,20 +34,23 @@ function App() {
       }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
-      if (!session) setScreen('login')
+      if (!session) {
+        isInitialized.current = false
+        setScreen('login')
+      } else if (event === 'SIGNED_IN' && !isInitialized.current) {
+        // Only init on the first real login — skip session recovery / tab refocus events
+        initUser()
+      }
+      // TOKEN_REFRESHED, INITIAL_SESSION, session recovery: do nothing
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  useEffect(() => {
-    if (!session) return
-    initUser()
-  }, [session])
-
   async function initUser() {
+    isInitialized.current = true
     setScreen('loading')
     try {
       await api.post('/api/users/sync')
@@ -62,7 +71,7 @@ function App() {
       if (!data.mode) {
         setScreen('onboarding-mode')
       } else {
-        setScreen('app')
+        setScreen('home')
       }
     } catch {
       setScreen('login')
@@ -91,31 +100,32 @@ function App() {
         onBack={() => setScreen('onboarding-key')}
         onDone={(mode) => {
           setUserMode(mode)
-          setScreen('app')
+          setScreen('home')
         }}
       />
     )
   }
 
-  // Logged-in placeholder — will be replaced by Dashboard in Block E
-  return (
-    <div className="min-h-screen bg-page flex flex-col">
-      <Nav
-        logoHref="#"
-        rightSlot={
-          <button onClick={handleLogout} className="text-ink-secondary text-sm hover:text-ink transition-colors">
-            Sign out
-          </button>
-        }
+  if (screen === 'home') {
+    return (
+      <Home
+        onStart={(url) => { setSessionUrl(url); setScreen('session') }}
+        onLogout={handleLogout}
       />
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-ink-secondary text-sm mb-1">Logged in as {session?.user.email}</p>
-          <p className="text-ink-secondary text-sm">Mode: <span className="text-accent-text">{userMode}</span></p>
-        </div>
-      </div>
-    </div>
-  )
+    )
+  }
+
+  if (screen === 'session') {
+    return (
+      <SessionPage
+        url={sessionUrl}
+        onBack={() => setScreen('home')}
+        onLogout={handleLogout}
+      />
+    )
+  }
+
+  return null
 }
 
 export default App
