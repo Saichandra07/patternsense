@@ -33,7 +33,7 @@ public class SessionService {
 
     private static final String INITIAL_STATE =
         "{\"phase\":1,\"phase1\":{\"comprehension_gaps\":[],\"confirmed_at_turn\":null}," +
-        "\"phase2\":{\"user_approach\":\"\",\"approach_type\":null,\"active_tier\":1," +
+        "\"phase2\":{\"user_approach\":\"\",\"user_reasoning\":\"\",\"approach_type\":null,\"active_tier\":1," +
         "\"tier1_turns\":0,\"stuck_count\":0,\"stuck_points\":[],\"used_stuck_button\":false," +
         "\"needed_explanation\":false,\"confirmed_solved_at_turn\":null}," +
         "\"phase3\":{\"pattern_confirmed\":false,\"variance_understood\":false,\"gap_note\":null}}";
@@ -116,7 +116,9 @@ public class SessionService {
         JsonNode state = objectMapper.readTree(session.getSessionState());
         int phase = state.get("phase").asInt();
 
-        String prompt = buildPrompt(phase, problem, session.getProblemBrief(), state, recent, content);
+        List<WeaknessMap> weaknesses = weaknessMapRepository.findByUserId(userId);
+        String weaknessContext = buildWeaknessContext(weaknesses);
+        String prompt = buildPrompt(phase, problem, session.getProblemBrief(), state, recent, content, weaknessContext);
         String rawResponse = geminiService.sendMessage(prompt, apiKey);
         log.info("Gemini raw response (phase {}): {}", phase, rawResponse);
 
@@ -209,8 +211,14 @@ public class SessionService {
         WeaknessMap wm = existing.orElse(new WeaknessMap());
         wm.setUserId(userId);
         wm.setPattern(corePattern);
-        int currentScore = wm.getConfidenceScore() == null ? 50 : wm.getConfidenceScore();
-        int newScore = Math.max(0, Math.min(100, currentScore + confidenceDelta));
+        int newScore;
+        if (existing.isEmpty()) {
+            // First session on this pattern — they just learned it. Start neutral; delta applies on repeat sessions.
+            newScore = 50;
+        } else {
+            int current = existing.get().getConfidenceScore();
+            newScore = Math.max(0, Math.min(100, current + confidenceDelta));
+        }
         wm.setConfidenceScore(newScore);
         wm.setLastUpdated(OffsetDateTime.now());
         weaknessMapRepository.save(wm);
@@ -248,8 +256,10 @@ public class SessionService {
             : allMessages;
 
         int phase = state.get("phase").asInt();
+        List<WeaknessMap> stuckWeaknesses = weaknessMapRepository.findByUserId(userId);
+        String stuckWeaknessContext = buildWeaknessContext(stuckWeaknesses);
         String prompt = buildPrompt(phase, problem, session.getProblemBrief(), state, recent,
-            "[User clicked 'I'm stuck' — provide a more direct hint or explanation]");
+            "[User clicked 'I'm stuck' — provide a more direct hint or explanation]", stuckWeaknessContext);
 
         String rawResponse = geminiService.sendMessage(prompt, apiKey);
         JsonNode response = objectMapper.readTree(rawResponse);
@@ -275,19 +285,19 @@ public class SessionService {
     }
 
     private String buildPrompt(int phase, Problem problem, String problemBrief,
-                               JsonNode state, List<Message> recent, String userMessage) throws Exception {
+                               JsonNode state, List<Message> recent, String userMessage,
+                               String weaknessContext) throws Exception {
         String stateStr = objectMapper.writeValueAsString(state);
         return switch (phase) {
             case 1 -> promptBuilder.phase1(problem.getTitle(), problem.getDescription(),
                 problemBrief, stateStr, recent, userMessage);
             case 2 -> {
                 JsonNode p2 = state.get("phase2");
-                int activeTier = p2.path("active_tier").asInt(1);
                 int stuckCount = p2.path("stuck_count").asInt(0);
-                JsonNode approachNode = p2.path("approach_type");
-                boolean isFirst = approachNode.isNull() || approachNode.asText("").isEmpty();
+                boolean hasApproach = !p2.path("user_approach").asText("").isEmpty();
+                boolean hasReasoning = !p2.path("user_reasoning").asText("").isEmpty();
                 yield promptBuilder.phase2(problem.getTitle(), problem.getDescription(),
-                    problemBrief, stateStr, recent, userMessage, activeTier, stuckCount, isFirst);
+                    problemBrief, stateStr, recent, userMessage, stuckCount, hasApproach, hasReasoning, weaknessContext);
             }
             case 3 -> {
                 String userMode = state.path("phase2").path("needed_explanation").asBoolean(false)
@@ -297,6 +307,16 @@ public class SessionService {
             }
             default -> throw new IllegalStateException("Unknown phase: " + phase);
         };
+    }
+
+    private String buildWeaknessContext(List<WeaknessMap> weaknesses) {
+        if (weaknesses.isEmpty()) return "(no patterns practiced yet)";
+        StringBuilder sb = new StringBuilder();
+        for (WeaknessMap w : weaknesses) {
+            sb.append(w.getPattern()).append(": ").append(w.getConfidenceScore()).append("/100 | ");
+        }
+        String s = sb.toString();
+        return s.endsWith(" | ") ? s.substring(0, s.length() - 3) : s;
     }
 
     /**
@@ -332,7 +352,7 @@ public class SessionService {
         if (delta.has("phase2")) {
             JsonNode d = delta.get("phase2");
             ObjectNode p2 = (ObjectNode) state.get("phase2");
-            Set<String> allowed = Set.of("user_approach", "approach_type", "active_tier",
+            Set<String> allowed = Set.of("user_approach", "user_reasoning", "approach_type", "active_tier",
                 "tier1_turns", "stuck_count", "stuck_points", "used_stuck_button",
                 "needed_explanation", "confirmed_solved_at_turn");
             d.fieldNames().forEachRemaining(f -> {
@@ -340,6 +360,7 @@ public class SessionService {
             });
 
             if (d.has("user_approach")) p2.set("user_approach", d.get("user_approach"));
+            if (d.has("user_reasoning")) p2.set("user_reasoning", d.get("user_reasoning"));
 
             if (d.has("approach_type")) {
                 String val = d.get("approach_type").asText();

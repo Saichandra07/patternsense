@@ -1,0 +1,219 @@
+export interface RoadmapProblem {
+  order: number
+  title: string
+  difficulty: 'easy' | 'medium' | 'hard'
+  url: string
+  slug: string | null  // null for non-LeetCode problems
+  teaches: string
+}
+
+export interface RoadmapPattern {
+  order: number
+  pattern: string
+  coreLesson: string
+  problems: RoadmapProblem[]
+}
+
+export const ROADMAP: RoadmapPattern[] = [
+  {
+    order: 1,
+    pattern: 'Arrays & Hashing',
+    coreLesson: 'Trade O(n) space for O(1) lookup time.',
+    problems: [
+      { order: 1, title: 'Contains Duplicate', difficulty: 'easy', url: 'https://leetcode.com/problems/contains-duplicate/', slug: 'contains-duplicate', teaches: 'Have I seen this? → HashSet exists for this' },
+      { order: 2, title: 'Two Sum', difficulty: 'easy', url: 'https://leetcode.com/problems/two-sum/', slug: 'two-sum', teaches: 'Find the complement → HashMap maps value → index' },
+      { order: 3, title: 'Ransom Note', difficulty: 'easy', url: 'https://leetcode.com/problems/ransom-note/', slug: 'ransom-note', teaches: 'Two frequency maps, compare counts — HashMap as counter' },
+      { order: 4, title: 'Group Anagrams', difficulty: 'medium', url: 'https://leetcode.com/problems/group-anagrams/', slug: 'group-anagrams', teaches: 'Keys can be computed (sorted string) — not just raw values' },
+      { order: 5, title: 'Top K Frequent Elements', difficulty: 'medium', url: 'https://leetcode.com/problems/top-k-frequent-elements/', slug: 'top-k-frequent-elements', teaches: 'Frequency counting + selection — map as counter, then sort by value' },
+      { order: 6, title: 'Longest Consecutive Sequence', difficulty: 'medium', url: 'https://leetcode.com/problems/longest-consecutive-sequence/', slug: 'longest-consecutive-sequence', teaches: 'HashSet for O(1) existence check + only start from sequence roots' },
+    ],
+  },
+  {
+    order: 2,
+    pattern: 'Two Pointers',
+    coreLesson: 'Two coordinated pointers on sorted/structured arrays solve in O(n) what brute force does in O(n²).',
+    problems: [
+      { order: 1, title: 'Squaring a Sorted Array', difficulty: 'easy', url: 'https://leetcode.com/problems/squares-of-a-sorted-array/', slug: 'squares-of-a-sorted-array', teaches: 'Simplest TP: converge from both ends, largest absolute value is at one end' },
+      { order: 2, title: 'Pair with Target Sum (Two Sum II)', difficulty: 'easy', url: 'https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/', slug: 'two-sum-ii-input-array-is-sorted', teaches: 'Sum comparison drives pointer movement — sum too big → right in, too small → left out' },
+      { order: 3, title: 'Remove Duplicates from Sorted Array', difficulty: 'easy', url: 'https://leetcode.com/problems/remove-duplicates-from-sorted-array/', slug: 'remove-duplicates-from-sorted-array', teaches: 'Slow/fast pointer: slow tracks write position, fast scans ahead' },
+      { order: 4, title: 'Sort Colors (Dutch National Flag)', difficulty: 'medium', url: 'https://leetcode.com/problems/sort-colors/', slug: 'sort-colors', teaches: 'Three-pointer partition — a mid pointer added to the left/right model' },
+      { order: 5, title: '3Sum', difficulty: 'medium', url: 'https://leetcode.com/problems/3sum/', slug: '3sum', teaches: 'Outer loop fixes one element, TP solves the remaining two — reduces 3-variable to 2' },
+      { order: 6, title: '3Sum Closest', difficulty: 'medium', url: 'https://leetcode.com/problems/3sum-closest/', slug: '3sum-closest', teaches: 'Same as Q5 but track minimum difference — goal changes, structure doesn\'t' },
+      { order: 7, title: 'Container With Most Water', difficulty: 'medium', url: 'https://leetcode.com/problems/container-with-most-water/', slug: 'container-with-most-water', teaches: 'Which pointer to move: always the shorter wall — the constraining side insight' },
+      { order: 8, title: 'Comparing Strings with Backspaces', difficulty: 'medium', url: 'https://leetcode.com/problems/backspace-string-compare/', slug: 'backspace-string-compare', teaches: 'Two pointers on two different strings simultaneously — extends to multi-sequence TP' },
+      { order: 9, title: 'Minimum Window Sort', difficulty: 'medium', url: 'https://leetcode.com/problems/shortest-unsorted-continuous-subarray/', slug: 'shortest-unsorted-continuous-subarray', teaches: 'Find the unsorted window by moving from both ends — synthesis of all above' },
+    ],
+  },
+  {
+    order: 3,
+    pattern: 'Sliding Window',
+    coreLesson: 'Maintain a window invariant — expand right freely, shrink left conditionally.',
+    problems: [
+      { order: 1, title: 'Maximum Sum Subarray of Size K', difficulty: 'easy', url: 'https://www.geeksforgeeks.org/problems/max-sum-subarray-of-size-k5313/1', slug: null, teaches: 'Fixed window: just slide, no shrink logic needed' },
+      { order: 2, title: 'Minimum Size Subarray Sum', difficulty: 'medium', url: 'https://leetcode.com/problems/minimum-size-subarray-sum/', slug: 'minimum-size-subarray-sum', teaches: 'Variable window: shrink when sum ≥ target (window is too big)' },
+      { order: 3, title: 'Longest Substring with K Distinct Characters', difficulty: 'medium', url: 'https://www.geeksforgeeks.org/problems/longest-k-unique-characters-substring0853/1', slug: null, teaches: 'Variable window: shrink when distinct count > K (window is invalid)' },
+      { order: 4, title: 'Fruits into Baskets', difficulty: 'medium', url: 'https://leetcode.com/problems/fruit-into-baskets/', slug: 'fruit-into-baskets', teaches: 'Same as Q3 with K=2 — different framing, identical pattern' },
+      { order: 5, title: 'Longest Substring Without Repeating Characters', difficulty: 'medium', url: 'https://leetcode.com/problems/longest-substring-without-repeating-characters/', slug: 'longest-substring-without-repeating-characters', teaches: 'Shrink when a duplicate appears — invalid window, not just oversized' },
+      { order: 6, title: 'Longest Repeating Character Replacement', difficulty: 'hard', url: 'https://leetcode.com/problems/longest-repeating-character-replacement/', slug: 'longest-repeating-character-replacement', teaches: 'Shrink based on (window_size - max_freq > k) — derived condition, not a direct check' },
+      { order: 7, title: 'Max Consecutive Ones III', difficulty: 'hard', url: 'https://leetcode.com/problems/max-consecutive-ones-iii/', slug: 'max-consecutive-ones-iii', teaches: 'At most K zeros allowed — same structure as Q6, different invariant' },
+      { order: 8, title: 'Permutation in String', difficulty: 'hard', url: 'https://leetcode.com/problems/permutation-in-string/', slug: 'permutation-in-string', teaches: 'Fixed window + frequency map — combines Q1 (fixed) + Q5 (freq tracking)' },
+      { order: 9, title: 'Minimum Window Substring', difficulty: 'hard', url: 'https://leetcode.com/problems/minimum-window-substring/', slug: 'minimum-window-substring', teaches: 'Two-constraint variable window — hardest: shrink when both constraints satisfied' },
+    ],
+  },
+  {
+    order: 4,
+    pattern: 'Kadane',
+    coreLesson: 'At each position, decide: extend the current subarray or restart from here?',
+    problems: [
+      { order: 1, title: 'Maximum Subarray Sum', difficulty: 'easy', url: 'https://leetcode.com/problems/maximum-subarray/', slug: 'maximum-subarray', teaches: 'Classic Kadane: dp[i] = max(nums[i], dp[i-1] + nums[i])' },
+      { order: 2, title: 'Minimum Subarray Sum', difficulty: 'easy', url: 'https://www.geeksforgeeks.org/problems/smallest-sum-contiguous-subarray/1', slug: null, teaches: 'Same logic, flip max to min — tests if you understood Q1 or just memorized it' },
+      { order: 3, title: 'Maximum Product Subarray', difficulty: 'medium', url: 'https://leetcode.com/problems/maximum-product-subarray/', slug: 'maximum-product-subarray', teaches: 'Product can flip sign → must track both current max AND current min simultaneously' },
+      { order: 4, title: 'Maximum Sum Circular Subarray', difficulty: 'medium', url: 'https://leetcode.com/problems/maximum-sum-circular-subarray/', slug: 'maximum-sum-circular-subarray', teaches: 'Either normal Kadane OR wrap-around = total_sum - min_subarray' },
+      { order: 5, title: 'Maximum Subarray Sum with One Deletion', difficulty: 'hard', url: 'https://leetcode.com/problems/maximum-subarray-sum-with-one-deletion/', slug: 'maximum-subarray-sum-with-one-deletion', teaches: 'Two states at each position: deleted once and not deleted yet' },
+    ],
+  },
+  {
+    order: 5,
+    pattern: 'Prefix Sum',
+    coreLesson: 'Precompute cumulative sums once, answer range queries in O(1).',
+    problems: [
+      { order: 1, title: 'Find Pivot Index', difficulty: 'easy', url: 'https://leetcode.com/problems/find-pivot-index/', slug: 'find-pivot-index', teaches: 'Direct prefix sum: left_sum = prefix[i], right_sum = total - prefix[i+1]' },
+      { order: 2, title: 'Subarray Sum Equals K', difficulty: 'medium', url: 'https://leetcode.com/problems/subarray-sum-equals-k/', slug: 'subarray-sum-equals-k', teaches: 'prefix[i] - prefix[j] = k → store prefix sums in HashMap to count subarrays' },
+      { order: 3, title: 'Subarray Sums Divisible by K', difficulty: 'medium', url: 'https://leetcode.com/problems/subarray-sums-divisible-by-k/', slug: 'subarray-sums-divisible-by-k', teaches: 'Same as Q2 but with remainder as key' },
+      { order: 4, title: 'Contiguous Array', difficulty: 'medium', url: 'https://leetcode.com/problems/contiguous-array/', slug: 'contiguous-array', teaches: 'Map 0→-1, then find longest subarray with sum=0 — Q2 pattern with transformed input' },
+      { order: 5, title: 'Shortest Subarray with Sum at Least K', difficulty: 'hard', url: 'https://leetcode.com/problems/shortest-subarray-with-sum-at-least-k/', slug: 'shortest-subarray-with-sum-at-least-k', teaches: 'Prefix sum + monotonic deque — bridges into Stack territory' },
+    ],
+  },
+  {
+    order: 6,
+    pattern: 'Fast & Slow Pointers',
+    coreLesson: 'Two pointers moving at different speeds detect cycles and find structural midpoints.',
+    problems: [
+      { order: 1, title: 'Middle of the LinkedList', difficulty: 'easy', url: 'https://leetcode.com/problems/middle-of-the-linked-list/', slug: 'middle-of-the-linked-list', teaches: 'Fast moves 2, slow moves 1 — when fast reaches end, slow is at middle' },
+      { order: 2, title: 'LinkedList Cycle', difficulty: 'easy', url: 'https://leetcode.com/problems/linked-list-cycle/', slug: 'linked-list-cycle', teaches: 'If a cycle exists, fast will lap slow and they\'ll meet inside it' },
+      { order: 3, title: 'Start of LinkedList Cycle', difficulty: 'medium', url: 'https://leetcode.com/problems/linked-list-cycle-ii/', slug: 'linked-list-cycle-ii', teaches: 'Floyd\'s part 2: after meeting, pointers from head and meeting point converge at cycle start' },
+      { order: 4, title: 'Happy Number', difficulty: 'medium', url: 'https://leetcode.com/problems/happy-number/', slug: 'happy-number', teaches: 'Is this a cycle? on a non-list context — the mental model transfers' },
+      { order: 5, title: 'Find the Duplicate Number', difficulty: 'medium', url: 'https://leetcode.com/problems/find-the-duplicate-number/', slug: 'find-the-duplicate-number', teaches: 'Treat array as a linked list (index → value), apply Floyd\'s — biggest insight leap' },
+      { order: 6, title: 'Palindrome LinkedList', difficulty: 'medium', url: 'https://leetcode.com/problems/palindrome-linked-list/', slug: 'palindrome-linked-list', teaches: 'Find middle + reverse second half + compare both halves' },
+      { order: 7, title: 'Reorder List', difficulty: 'medium', url: 'https://leetcode.com/problems/reorder-list/', slug: 'reorder-list', teaches: 'Find middle + reverse second half + interleave both halves' },
+    ],
+  },
+  {
+    order: 7,
+    pattern: 'Stack',
+    coreLesson: 'LIFO structure for deferred decisions; monotonic stack for next greater/smaller problems.',
+    problems: [
+      { order: 1, title: 'Valid Parentheses', difficulty: 'easy', url: 'https://leetcode.com/problems/valid-parentheses/', slug: 'valid-parentheses', teaches: 'Push open brackets, check against top on close — simplest LIFO application' },
+      { order: 2, title: 'Remove Adjacent Duplicates', difficulty: 'easy', url: 'https://leetcode.com/problems/remove-all-adjacent-duplicates-in-string/', slug: 'remove-all-adjacent-duplicates-in-string', teaches: 'Stack as running state: push, pop when top equals current' },
+      { order: 3, title: 'Remove All Adjacent Duplicates II', difficulty: 'medium', url: 'https://leetcode.com/problems/remove-all-adjacent-duplicates-in-string-ii/', slug: 'remove-all-adjacent-duplicates-in-string-ii', teaches: 'Stack needs to track (character, count) pairs — state per element, not just element' },
+      { order: 4, title: 'Daily Temperatures', difficulty: 'medium', url: 'https://leetcode.com/problems/daily-temperatures/', slug: 'daily-temperatures', teaches: 'Monotonic decreasing stack: pop when you find the answer for a waiting element' },
+      { order: 5, title: 'Next Greater Element II', difficulty: 'medium', url: 'https://leetcode.com/problems/next-greater-element-ii/', slug: 'next-greater-element-ii', teaches: 'Q4 on a circular array — loop twice, mod-index trick' },
+      { order: 6, title: 'Remove K Digits', difficulty: 'hard', url: 'https://leetcode.com/problems/remove-k-digits/', slug: 'remove-k-digits', teaches: 'Monotonic increasing stack for optimization: pop larger digits greedily' },
+      { order: 7, title: 'Simplify Path', difficulty: 'medium', url: 'https://leetcode.com/problems/simplify-path/', slug: 'simplify-path', teaches: 'Stack as path processor — different domain, same push/pop reasoning' },
+    ],
+  },
+  {
+    order: 8,
+    pattern: 'Binary Search',
+    coreLesson: 'Any problem with a monotonic predicate (is X valid?) can halve its search space.',
+    problems: [
+      { order: 1, title: 'Binary Search', difficulty: 'easy', url: 'https://leetcode.com/problems/binary-search/', slug: 'binary-search', teaches: 'The mechanism: lo, hi, mid = (lo+hi)//2, adjust bounds' },
+      { order: 2, title: 'First and Last Position', difficulty: 'medium', url: 'https://leetcode.com/problems/find-first-and-last-position-of-element-in-sorted-array/', slug: 'find-first-and-last-position-of-element-in-sorted-array', teaches: 'Two BS calls with different find-leftmost / find-rightmost conditions' },
+      { order: 3, title: 'Peak Index in Mountain Array', difficulty: 'easy', url: 'https://leetcode.com/problems/peak-index-in-a-mountain-array/', slug: 'peak-index-in-a-mountain-array', teaches: 'BS where condition is direction: nums[mid] < nums[mid+1] means go right' },
+      { order: 4, title: 'Find Minimum in Rotated Sorted Array', difficulty: 'medium', url: 'https://leetcode.com/problems/find-minimum-in-rotated-sorted-array/', slug: 'find-minimum-in-rotated-sorted-array', teaches: 'Which half is sorted? — one half always is, binary decision on that' },
+      { order: 5, title: 'Search in Rotated Sorted Array', difficulty: 'medium', url: 'https://leetcode.com/problems/search-in-rotated-sorted-array/', slug: 'search-in-rotated-sorted-array', teaches: 'Q4 logic + now also find the target — two conditions combined' },
+      { order: 6, title: 'Koko Eating Bananas', difficulty: 'medium', url: 'https://leetcode.com/problems/koko-eating-bananas/', slug: 'koko-eating-bananas', teaches: 'The big leap — binary search on the answer space, not the array itself' },
+      { order: 7, title: 'Capacity to Ship Packages in D Days', difficulty: 'medium', url: 'https://leetcode.com/problems/capacity-to-ship-packages-within-d-days/', slug: 'capacity-to-ship-packages-within-d-days', teaches: 'Reinforces Q6: same BS on answer with different feasibility check' },
+      { order: 8, title: 'Aggressive Cows', difficulty: 'medium', url: 'https://www.geeksforgeeks.org/problems/aggressive-cows/0', slug: null, teaches: 'Maximize the minimum — BS on answer space + greedy feasibility' },
+      { order: 9, title: 'Split Array Largest Sum', difficulty: 'hard', url: 'https://leetcode.com/problems/split-array-largest-sum/', slug: 'split-array-largest-sum', teaches: 'Minimize the maximum — same family, harder feasibility check' },
+      { order: 10, title: 'Search a 2D Matrix', difficulty: 'medium', url: 'https://leetcode.com/problems/search-a-2d-matrix/', slug: 'search-a-2d-matrix', teaches: 'Treat 2D as 1D with row = mid // cols, col = mid % cols' },
+      { order: 11, title: 'Median of Two Sorted Arrays', difficulty: 'hard', url: 'https://leetcode.com/problems/median-of-two-sorted-arrays/', slug: 'median-of-two-sorted-arrays', teaches: 'BS on partition position — hardest; tests full command of the concept' },
+    ],
+  },
+  {
+    order: 9,
+    pattern: 'Trees (DFS/BFS)',
+    coreLesson: 'DFS = recurse on children (return info up or pass constraints down). BFS = process level by level with a queue.',
+    problems: [
+      { order: 1, title: 'Invert Binary Tree', difficulty: 'easy', url: 'https://leetcode.com/problems/invert-binary-tree/', slug: 'invert-binary-tree', teaches: 'Simplest DFS: base case + swap children. Establishes the recursive template.' },
+      { order: 2, title: 'Maximum Depth of Binary Tree', difficulty: 'easy', url: 'https://leetcode.com/problems/maximum-depth-of-binary-tree/', slug: 'maximum-depth-of-binary-tree', teaches: 'DFS returning a value UP the stack: 1 + max(left, right)' },
+      { order: 3, title: 'Symmetric Tree', difficulty: 'easy', url: 'https://leetcode.com/problems/symmetric-tree/', slug: 'symmetric-tree', teaches: 'DFS comparing two subtrees simultaneously — parallel recursion' },
+      { order: 4, title: 'Same Tree', difficulty: 'easy', url: 'https://leetcode.com/problems/same-tree/', slug: 'same-tree', teaches: 'Q3 logic on two separate trees — slight variation, builds confidence' },
+      { order: 5, title: 'Subtree of Another Tree', difficulty: 'medium', url: 'https://leetcode.com/problems/subtree-of-another-tree/', slug: 'subtree-of-another-tree', teaches: 'Combines Q4 (same tree check) with full tree traversal — composition' },
+      { order: 6, title: 'Binary Tree Level Order Traversal', difficulty: 'medium', url: 'https://leetcode.com/problems/binary-tree-level-order-traversal/', slug: 'binary-tree-level-order-traversal', teaches: 'BFS with deque — teaches when to use BFS (need level structure)' },
+      { order: 7, title: 'Binary Tree Right Side View', difficulty: 'medium', url: 'https://leetcode.com/problems/binary-tree-right-side-view/', slug: 'binary-tree-right-side-view', teaches: 'BFS variation: take last node per level — one-line change, different insight' },
+      { order: 8, title: 'Validate Binary Search Tree', difficulty: 'medium', url: 'https://leetcode.com/problems/validate-binary-search-tree/', slug: 'validate-binary-search-tree', teaches: 'DFS with bounds passed DOWN: (min_val, max_val) constraining each node' },
+      { order: 9, title: 'Kth Smallest Element in BST', difficulty: 'medium', url: 'https://leetcode.com/problems/kth-smallest-element-in-a-bst/', slug: 'kth-smallest-element-in-a-bst', teaches: 'Inorder traversal gives sorted order — BST property exploited' },
+      { order: 10, title: 'Path Sum II', difficulty: 'medium', url: 'https://leetcode.com/problems/path-sum-ii/', slug: 'path-sum-ii', teaches: 'DFS tracking the current path as a list, add to result at leaves' },
+      { order: 11, title: 'Binary Tree Maximum Path Sum', difficulty: 'hard', url: 'https://leetcode.com/problems/binary-tree-maximum-path-sum/', slug: 'binary-tree-maximum-path-sum', teaches: 'At each node: choose to extend one branch OR be the peak of a path — two decisions' },
+      { order: 12, title: 'Lowest Common Ancestor of a Binary Tree', difficulty: 'medium', url: 'https://leetcode.com/problems/lowest-common-ancestor-of-a-binary-tree/', slug: 'lowest-common-ancestor-of-a-binary-tree', teaches: 'DFS where left and right returning non-null simultaneously means found LCA here' },
+      { order: 13, title: 'Construct Binary Tree from Preorder and Inorder Traversal', difficulty: 'medium', url: 'https://leetcode.com/problems/construct-binary-tree-from-preorder-and-inorder-traversal/', slug: 'construct-binary-tree-from-preorder-and-inorder-traversal', teaches: 'Preorder gives root, inorder tells you where left/right split' },
+    ],
+  },
+  {
+    order: 10,
+    pattern: 'Backtracking',
+    coreLesson: 'Explore all possibilities by building a choice, recurring, then undoing (backtrack).',
+    problems: [
+      { order: 1, title: 'Fibonacci Number', difficulty: 'easy', url: 'https://leetcode.com/problems/fibonacci-number/', slug: 'fibonacci-number', teaches: 'Call stack, base case, overlapping calls — intro to recursion before backtracking' },
+      { order: 2, title: 'Check if Array Is Sorted', difficulty: 'easy', url: 'https://www.geeksforgeeks.org/problems/check-if-an-array-is-sorted0701/1', slug: null, teaches: 'Tail recursion: reduces to smaller subproblem at each step' },
+      { order: 3, title: 'Letter Combinations of a Phone Number', difficulty: 'medium', url: 'https://leetcode.com/problems/letter-combinations-of-a-phone-number/', slug: 'letter-combinations-of-a-phone-number', teaches: 'Explore all combinations: one choice per digit, build character by character' },
+      { order: 4, title: 'Generate Parentheses', difficulty: 'medium', url: 'https://leetcode.com/problems/generate-parentheses/', slug: 'generate-parentheses', teaches: 'Constrained exploration: only add ( if open < n, only add ) if close < open' },
+      { order: 5, title: 'Permutations', difficulty: 'medium', url: 'https://leetcode.com/problems/permutations/', slug: 'permutations', teaches: 'Explore all orderings: use visited[] to avoid reusing, undo after each branch' },
+      { order: 6, title: 'Combination Sum', difficulty: 'medium', url: 'https://leetcode.com/problems/combination-sum/', slug: 'combination-sum', teaches: 'Unbounded choices: you can reuse elements — recur with same index, not index+1' },
+      { order: 7, title: 'Palindrome Partitioning', difficulty: 'medium', url: 'https://leetcode.com/problems/palindrome-partitioning/', slug: 'palindrome-partitioning', teaches: 'Explore all string splits, prune the branch early if segment isn\'t a palindrome' },
+    ],
+  },
+  {
+    order: 11,
+    pattern: 'Heap',
+    coreLesson: 'Priority queue gives O(log n) access to the current max/min — use it when you need the best element repeatedly.',
+    problems: [
+      { order: 1, title: 'Kth Largest Element in an Array', difficulty: 'medium', url: 'https://leetcode.com/problems/kth-largest-element-in-an-array/', slug: 'kth-largest-element-in-an-array', teaches: 'Basic max-heap: push all, pop K times — or min-heap of size K' },
+      { order: 2, title: 'K Closest Points to Origin', difficulty: 'medium', url: 'https://leetcode.com/problems/k-closest-points-to-origin/', slug: 'k-closest-points-to-origin', teaches: 'Max-heap of size K: maintain K closest by popping the furthest when over K' },
+      { order: 3, title: 'Top K Frequent Words', difficulty: 'medium', url: 'https://leetcode.com/problems/top-k-frequent-words/', slug: 'top-k-frequent-words', teaches: 'Heap with custom comparator: sort by frequency then alphabetically' },
+      { order: 4, title: 'Merge K Sorted Lists', difficulty: 'hard', url: 'https://leetcode.com/problems/merge-k-sorted-lists/', slug: 'merge-k-sorted-lists', teaches: 'Min-heap as a pointer: track (value, list_idx, elem_idx) — always extend the smallest' },
+      { order: 5, title: 'Last Stone Weight', difficulty: 'easy', url: 'https://leetcode.com/problems/last-stone-weight/', slug: 'last-stone-weight', teaches: 'Max-heap for greedy: always smash the two heaviest' },
+      { order: 6, title: 'Reorganize String', difficulty: 'medium', url: 'https://leetcode.com/problems/reorganize-string/', slug: 'reorganize-string', teaches: 'Max-heap + greedy: always pick the most frequent remaining character that isn\'t last used' },
+      { order: 7, title: 'Task Scheduler', difficulty: 'medium', url: 'https://leetcode.com/problems/task-scheduler/', slug: 'task-scheduler', teaches: 'Greedy + heap: most frequent tasks first, cooldown period handled with a queue' },
+      { order: 8, title: 'Find Median from Data Stream', difficulty: 'hard', url: 'https://leetcode.com/problems/find-median-from-data-stream/', slug: 'find-median-from-data-stream', teaches: 'Two heaps: max-heap for lower half, min-heap for upper half — median is at the boundary' },
+      { order: 9, title: 'Sliding Window Median', difficulty: 'hard', url: 'https://leetcode.com/problems/sliding-window-median/', slug: 'sliding-window-median', teaches: 'Q8 inside a sliding window — add new element, remove expired element, maintain balance' },
+    ],
+  },
+  {
+    order: 12,
+    pattern: 'Graphs',
+    coreLesson: 'Graph traversal generalizes tree traversal — but graphs have cycles, multiple components, and weights.',
+    problems: [
+      { order: 1, title: 'Number of Islands', difficulty: 'medium', url: 'https://leetcode.com/problems/number-of-islands/', slug: 'number-of-islands', teaches: 'DFS flood-fill on a grid — the graph is implicit (no adjacency list needed)' },
+      { order: 2, title: 'Number of Provinces', difficulty: 'medium', url: 'https://leetcode.com/problems/number-of-provinces/', slug: 'number-of-provinces', teaches: 'DFS on adjacency matrix — explicit graph, count connected components' },
+      { order: 3, title: 'Rotting Oranges', difficulty: 'medium', url: 'https://leetcode.com/problems/rotting-oranges/', slug: 'rotting-oranges', teaches: 'Multi-source BFS: multiple starting nodes simultaneously — teaches simultaneous spread' },
+      { order: 4, title: 'Cycle Detection in Undirected Graph', difficulty: 'medium', url: 'https://www.geeksforgeeks.org/problems/detect-cycle-in-an-undirected-graph/1', slug: null, teaches: 'DFS with parent tracking: if you visit a neighbor that isn\'t your parent, cycle exists' },
+      { order: 5, title: 'Course Schedule (Cycle in Directed Graph)', difficulty: 'medium', url: 'https://leetcode.com/problems/course-schedule/', slug: 'course-schedule', teaches: 'DFS with in-stack tracking: visited vs in_recursion_stack — directed changes everything' },
+      { order: 6, title: 'Course Schedule II (Topological Sort)', difficulty: 'medium', url: 'https://leetcode.com/problems/course-schedule-ii/', slug: 'course-schedule-ii', teaches: 'BFS (Kahn\'s): nodes with 0 in-degree go first — requires Q5 understanding' },
+      { order: 7, title: 'Is Graph Bipartite?', difficulty: 'medium', url: 'https://leetcode.com/problems/is-graph-bipartite/', slug: 'is-graph-bipartite', teaches: '2-coloring with BFS: if a neighbor has the same color, not bipartite' },
+      { order: 8, title: 'Network Delay Time', difficulty: 'medium', url: 'https://leetcode.com/problems/network-delay-time/', slug: 'network-delay-time', teaches: 'Dijkstra\'s basic: min-heap + dist array — shortest path with weights' },
+      { order: 9, title: 'Path With Minimum Effort', difficulty: 'medium', url: 'https://leetcode.com/problems/path-with-minimum-effort/', slug: 'path-with-minimum-effort', teaches: 'Dijkstra\'s variant: minimize maximum edge — different cost function, same algorithm' },
+      { order: 10, title: 'Cheapest Flights Within K Stops', difficulty: 'medium', url: 'https://leetcode.com/problems/cheapest-flights-within-k-stops/', slug: 'cheapest-flights-within-k-stops', teaches: 'Bellman-Ford with K relaxations — Dijkstra\'s doesn\'t work with hop constraints' },
+      { order: 11, title: 'Word Ladder', difficulty: 'hard', url: 'https://leetcode.com/problems/word-ladder/', slug: 'word-ladder', teaches: 'BFS on implicit graph: each word transformation is an edge — graph is built on the fly' },
+      { order: 12, title: 'Swim in Rising Water', difficulty: 'hard', url: 'https://leetcode.com/problems/swim-in-rising-water/', slug: 'swim-in-rising-water', teaches: 'Dijkstra\'s / binary search on time — synthesis of Binary Search + Graphs' },
+    ],
+  },
+  {
+    order: 13,
+    pattern: 'Dynamic Programming',
+    coreLesson: 'Overlapping subproblems + optimal substructure → cache intermediate results, build bottom-up.',
+    problems: [
+      { order: 1, title: 'Fibonacci Number', difficulty: 'easy', url: 'https://leetcode.com/problems/fibonacci-number/', slug: 'fibonacci-number', teaches: 'Recursion → memoization → tabulation — the full DP evolution in one problem' },
+      { order: 2, title: 'Climbing Stairs', difficulty: 'easy', url: 'https://leetcode.com/problems/climbing-stairs/', slug: 'climbing-stairs', teaches: 'Choices at each step → count paths — canonical 1D DP' },
+      { order: 3, title: 'House Robber', difficulty: 'medium', url: 'https://leetcode.com/problems/house-robber/', slug: 'house-robber', teaches: 'Decision affects future state: dp[i] = max(dp[i-1], dp[i-2] + nums[i])' },
+      { order: 4, title: 'Decode Ways', difficulty: 'medium', url: 'https://leetcode.com/problems/decode-ways/', slug: 'decode-ways', teaches: 'DP with conditional transitions — state depends on 1 OR 2 previous cells based on validity' },
+      { order: 5, title: 'Coin Change', difficulty: 'medium', url: 'https://leetcode.com/problems/coin-change/', slug: 'coin-change', teaches: 'Minimum DP with unbounded choices: dp[i] = min(dp[i], dp[i-coin] + 1)' },
+      { order: 6, title: 'Longest Increasing Subsequence', difficulty: 'medium', url: 'https://leetcode.com/problems/longest-increasing-subsequence/', slug: 'longest-increasing-subsequence', teaches: 'Flexible lookback: dp[i] = max(dp[j]+1 for all j < i where nums[j] < nums[i])' },
+      { order: 7, title: 'Partition Equal Subset Sum', difficulty: 'medium', url: 'https://leetcode.com/problems/partition-equal-subset-sum/', slug: 'partition-equal-subset-sum', teaches: '2D DP intro: dp[i][w] = can we form sum w using first i items? — include/exclude decision' },
+      { order: 8, title: '0/1 Knapsack', difficulty: 'medium', url: 'https://www.geeksforgeeks.org/problems/0-1-knapsack-problem0945/1', slug: null, teaches: 'Extends Q7: each item has weight AND value — maximize value, same 2D structure' },
+      { order: 9, title: 'Longest Common Subsequence', difficulty: 'medium', url: 'https://leetcode.com/problems/longest-common-subsequence/', slug: 'longest-common-subsequence', teaches: '2D DP on two sequences: grid where dp[i][j] = LCS of first-i and first-j characters' },
+      { order: 10, title: 'Edit Distance', difficulty: 'hard', url: 'https://leetcode.com/problems/edit-distance/', slug: 'edit-distance', teaches: '3-operation 2D DP: delete, insert, replace — full command of 2D DP required' },
+    ],
+  },
+]

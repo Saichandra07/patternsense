@@ -7,11 +7,17 @@ import Signup from './pages/Signup'
 import OnboardingKey from './pages/OnboardingKey'
 import OnboardingMode from './pages/OnboardingMode'
 import Home from './pages/Home'
+import DashboardGuided from './pages/DashboardGuided'
 import SessionPage from './pages/SessionPage'
+import WeaknessMap from './pages/WeaknessMap'
+import Roadmap from './pages/Roadmap'
 import LoadingScreen from './components/LoadingScreen'
 import type { Session } from '@supabase/supabase-js'
 
-type Screen = 'loading' | 'landing' | 'login' | 'signup' | 'onboarding-key' | 'onboarding-mode' | 'home' | 'session'
+type Screen =
+  | 'loading' | 'landing' | 'login' | 'signup'
+  | 'onboarding-key' | 'onboarding-mode'
+  | 'home' | 'session' | 'weakness-map' | 'roadmap'
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -40,7 +46,6 @@ function App() {
         isInitialized.current = false
         setScreen('login')
       } else if (event === 'SIGNED_IN' && !isInitialized.current) {
-        // Only init on the first real login — skip session recovery / tab refocus events
         initUser()
       }
       // TOKEN_REFRESHED, INITIAL_SESSION, session recovery: do nothing
@@ -84,6 +89,11 @@ function App() {
     setScreen('login')
   }
 
+  function startSession(url: string) {
+    setSessionUrl(url)
+    setScreen('session')
+  }
+
   if (screen === 'loading') return <LoadingScreen />
 
   if (screen === 'landing') return <Landing />
@@ -107,10 +117,21 @@ function App() {
   }
 
   if (screen === 'home') {
+    if (userMode === 'guided') {
+      return (
+        <DashboardGuided
+          onStart={startSession}
+          onLogout={handleLogout}
+          onWeaknessMap={() => setScreen('weakness-map')}
+          onRoadmap={() => setScreen('roadmap')}
+        />
+      )
+    }
     return (
       <Home
-        onStart={(url) => { setSessionUrl(url); setScreen('session') }}
+        onStart={startSession}
         onLogout={handleLogout}
+        onWeaknessMap={() => setScreen('weakness-map')}
       />
     )
   }
@@ -120,6 +141,25 @@ function App() {
       <SessionPage
         url={sessionUrl}
         onBack={() => setScreen('home')}
+        onLogout={handleLogout}
+      />
+    )
+  }
+
+  if (screen === 'weakness-map') {
+    return (
+      <WeaknessMap
+        onBack={() => setScreen('home')}
+        onLogout={handleLogout}
+      />
+    )
+  }
+
+  if (screen === 'roadmap') {
+    return (
+      <Roadmap
+        onBack={() => setScreen('home')}
+        onStart={startSession}
         onLogout={handleLogout}
       />
     )

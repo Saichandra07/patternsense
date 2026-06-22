@@ -57,22 +57,34 @@ public class GeminiService {
     }
 
     private String callGemini(String prompt, String apiKey) throws Exception {
-        Map<String, Object> body = Map.of(
+        String bodyJson = objectMapper.writeValueAsString(Map.of(
             "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
             "generationConfig", Map.of("responseMimeType", "application/json")
-        );
+        ));
 
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(GEMINI_BASE + "?key=" + apiKey))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+                .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
                 .build();
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            log.error("Gemini error — status: {} body: {}", response.statusCode(), response.body());
-            throw new RuntimeException("Gemini API error: HTTP " + response.statusCode() + " — " + response.body());
+        int[] backoffSeconds = {1, 2, 4};
+        HttpResponse<String> response = null;
+
+        for (int attempt = 0; attempt <= backoffSeconds.length; attempt++) {
+            response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) break;
+
+            boolean retryable = response.statusCode() == 503 || response.statusCode() == 429;
+            if (!retryable || attempt == backoffSeconds.length) {
+                log.error("Gemini error — status: {} body: {}", response.statusCode(), response.body());
+                throw new RuntimeException("Gemini API error: HTTP " + response.statusCode() + " — " + response.body());
+            }
+
+            log.warn("Gemini returned {} — retrying in {}s (attempt {}/{})",
+                response.statusCode(), backoffSeconds[attempt], attempt + 1, backoffSeconds.length);
+            Thread.sleep(backoffSeconds[attempt] * 1000L);
         }
 
         JsonNode root = objectMapper.readTree(response.body());
