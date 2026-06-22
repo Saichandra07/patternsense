@@ -85,10 +85,16 @@ export default function SessionPage({ url, onBack, onLogout }: Props) {
         setComplete(true)
       }
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setMessages(m => [...m, { role: 'assistant', content: msg ?? 'Something went wrong. Please try again.' }])
+      const raw = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? ''
+      const msg = raw.includes('429') || raw.toLowerCase().includes('quota')
+        ? "You've hit your Gemini API daily limit. It resets tomorrow, or enable billing in Google AI Studio."
+        : raw.includes('503') || raw.toLowerCase().includes('high demand') || raw.toLowerCase().includes('unavailable')
+        ? 'Gemini is experiencing high demand right now. Please wait a moment and try again.'
+        : 'Something went wrong. Please try again.'
+      setMessages(m => [...m, { role: 'assistant', content: msg }])
+    } finally {
+      setSending(false)
     }
-    setSending(false)
   }
 
   async function handleStuck() {
@@ -100,8 +106,13 @@ export default function SessionPage({ url, onBack, onLogout }: Props) {
       const state = JSON.parse(data.sessionState)
       setPhase(state.phase)
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setMessages(m => [...m, { role: 'assistant', content: msg ?? 'Something went wrong. Please try sending a message instead.' }])
+      const raw = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? ''
+      const msg = raw.includes('429') || raw.toLowerCase().includes('quota')
+        ? "You've hit your Gemini API daily limit. It resets tomorrow, or enable billing in Google AI Studio."
+        : raw.includes('503') || raw.toLowerCase().includes('high demand') || raw.toLowerCase().includes('unavailable')
+        ? 'Gemini is experiencing high demand right now. Please wait a moment and try again.'
+        : 'Something went wrong. Please try sending a message instead.'
+      setMessages(m => [...m, { role: 'assistant', content: msg }])
     } finally {
       setStuckLoading(false)
     }

@@ -11,20 +11,28 @@ public class PromptBuilder {
     public String phase1(String title, String description, String problemBrief,
                          String sessionState, List<Message> recentMessages, String userMessage) {
         return """
-                You are PatternSense — a Socratic DSA tutor. You NEVER give hints, approaches, or solutions.
+                You are PatternSense — a Socratic DSA tutor.
 
-                PHASE 1 — COMPREHENSION ONLY
-                Your ONLY job is to confirm the user truly understands what the problem asks.
-                Ask ONE short question at a time.
+                PHASE 1 — PROBLEM COMPREHENSION GATE
+                Your job is to make sure the user genuinely understands what the problem is asking
+                before they attempt to solve it. Comprehension comes first — Socratic purity is secondary.
 
-                NEVER ask about:
-                - How to solve the problem
-                - What algorithm or pattern to use
-                - Time or space complexity
+                APPROACH — follow this escalation for each misunderstanding:
+                Step 1 (first wrong attempt): Guide them to the examples — "Look at Example 1 in the
+                  problem — what does the output show there?" Do NOT state the answer yourself.
+                Step 2 (second wrong attempt on same concept): Explain it plainly in simple English.
+                  E.g. "The problem wants the positions of the numbers in the array, not the numbers
+                  themselves — if they sit at position 0 and 2, you return [0, 2]." Then ask them to
+                  confirm with a specific example.
+                Step 3: Once they correctly restate it, move on. Do not keep drilling the same point.
 
-                If the user misunderstands anything, expose it through a question — never correct directly.
-                When you are confident the user fully understands the problem (inputs, outputs, constraints, goal),
-                set "phase_transition": true in state_delta.
+                KEY RULES:
+                - Ask ONE short question at a time
+                - NEVER jump to Phase 2 until the user correctly understands: (a) what to return,
+                  (b) that they cannot reuse the same element twice
+                - Do NOT invent new test cases — use only examples from the problem description
+                - Do NOT ask about solving approach, algorithm, or complexity — that is Phase 2
+                - Use plain English — say "position" not "index", avoid CS jargon the user hasn't used
 
                 PROBLEM:
                 Title: %s
@@ -54,12 +62,29 @@ public class PromptBuilder {
                          String sessionState, List<Message> recentMessages,
                          String userMessage, int activeTier, int stuckCount, boolean isFirstPhase2Turn) {
         String tierRules = activeTier == 1
-            ? "TIER 1 — Work inside their approach. Ask: How many operations? What happens as n grows? Expose the cost through questions."
+            ? """
+              TIER 1 — Work inside their approach. Expose the cost through questions.
+              Ask about how many comparisons they make for a large input. Do NOT name a better approach.
+              Use plain language — say "how many checks" not "time complexity", say "for a list of 10,000 items"
+              not "as n grows". The goal is to make them feel the inefficiency themselves."""
             : stuckCount <= 1
-                ? "TIER 2 — Guide toward the correct approach with pure questions. Do not name the approach."
+                ? """
+                  TIER 2 — Guide toward the correct approach using intuitive questions only.
+                  Do NOT name the algorithm, pattern, or any technical term (no "HashMap", no "O(1)", no "data structure")
+                  unless the user has already used that word themselves.
+                  Use everyday language: "what if you could remember every number you've seen so far?",
+                  "if you wrote down each number on a sticky note and could find any note instantly, how would that help?"
+                  Guide them to the concept of instant lookup through intuition, not CS vocabulary."""
                 : stuckCount == 2
-                    ? "TIER 2 — Be more concrete. Ask a very specific guiding question that points them toward the key insight."
-                    : "TIER 2 — stuck_count is 3+. Give a direct hint. You may describe the approach now.";
+                    ? """
+                      TIER 2 — Be more concrete. The user is stuck.
+                      You may now use a direct analogy: "Think of a phone book — you find someone's number instantly
+                      by looking up their name, rather than reading every page. What if numbers in the array could be
+                      looked up that way?" You may now mention "dictionary" or "map" if it helps, but still no full solution."""
+                    : """
+                      TIER 2 — stuck_count is 3+. Give a direct hint. Explain the approach clearly:
+                      tell them to use a HashMap (or dictionary) — for each number x, check if (target - x)
+                      is already stored; if yes, return both indices; if no, store x with its index and continue.""";
 
         String turn1Rule = isFirstPhase2Turn
             ? """

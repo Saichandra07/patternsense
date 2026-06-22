@@ -2,6 +2,8 @@ package com.patternsense.backend.controller;
 
 import com.patternsense.backend.service.SessionService;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -15,7 +17,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SessionController {
 
+    private static final Logger log = LoggerFactory.getLogger(SessionController.class);
     private final SessionService sessionService;
+
+    private static String msg(Exception e) {
+        String m = e.getMessage();
+        return m != null ? m : e.getClass().getSimpleName();
+    }
 
     @PostMapping("/start")
     public ResponseEntity<Map<String, Object>> start(
@@ -28,9 +36,10 @@ public class SessionController {
                 return ResponseEntity.badRequest().body(Map.of("error", "url is required"));
             return ResponseEntity.ok(sessionService.startSession(userId, url));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+            log.error("start() failed", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", msg(e)));
         }
     }
 
@@ -46,11 +55,12 @@ public class SessionController {
                 return ResponseEntity.badRequest().body(Map.of("error", "content is required"));
             return ResponseEntity.ok(sessionService.sendMessage(userId, sessionId, content));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
         } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+            log.error("message() failed for session {}", sessionId, e);
+            return ResponseEntity.internalServerError().body(Map.of("error", msg(e)));
         }
     }
 
@@ -62,9 +72,10 @@ public class SessionController {
             UUID userId = UUID.fromString(jwt.getSubject());
             return ResponseEntity.ok(sessionService.endSession(userId, sessionId));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+            log.error("end() failed for session {}", sessionId, e);
+            return ResponseEntity.internalServerError().body(Map.of("error", msg(e)));
         }
     }
 
@@ -76,11 +87,12 @@ public class SessionController {
             UUID userId = UUID.fromString(jwt.getSubject());
             return ResponseEntity.ok(sessionService.stuck(userId, sessionId));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
         } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+            log.error("stuck() failed for session {}", sessionId, e);
+            return ResponseEntity.internalServerError().body(Map.of("error", msg(e)));
         }
     }
 }

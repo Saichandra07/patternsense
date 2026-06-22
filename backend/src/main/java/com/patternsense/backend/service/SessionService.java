@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.patternsense.backend.entity.*;
 import com.patternsense.backend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,8 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class SessionService {
+
+    private static final Logger log = LoggerFactory.getLogger(SessionService.class);
 
     private final SessionRepository sessionRepository;
     private final MessageRepository messageRepository;
@@ -114,9 +118,14 @@ public class SessionService {
 
         String prompt = buildPrompt(phase, problem, session.getProblemBrief(), state, recent, content);
         String rawResponse = geminiService.sendMessage(prompt, apiKey);
+        log.info("Gemini raw response (phase {}): {}", phase, rawResponse);
 
         JsonNode response = objectMapper.readTree(rawResponse);
-        String assistantMessage = response.get("message").asText();
+        String assistantMessage = response.path("message").asText("");
+        if (assistantMessage.isBlank()) {
+            log.error("Gemini response missing 'message' field. Raw: {}", rawResponse);
+            throw new RuntimeException("Gemini returned an unexpected response format.");
+        }
         JsonNode delta = response.has("state_delta") ? response.get("state_delta") : objectMapper.createObjectNode();
 
         ObjectNode newState = (ObjectNode) objectMapper.readTree(session.getSessionState());
@@ -297,11 +306,15 @@ public class SessionService {
     private boolean applyDelta(ObjectNode state, JsonNode delta) {
         if (delta == null || delta.isNull() || !delta.isObject() || delta.isEmpty()) return false;
 
-        Set<String> topLevel = Set.of("phase_transition", "phase1", "phase2", "phase3");
+        // "phase" is ignored if Gemini includes it — phase is always incremented by backend via phase_transition
+        Set<String> topLevel = Set.of("phase_transition", "phase1", "phase2", "phase3", "phase");
         delta.fieldNames().forEachRemaining(f -> {
             if (!topLevel.contains(f))
                 throw new IllegalArgumentException("Rejected state_delta: unknown field '" + f + "'");
         });
+        if (delta.has("phase")) {
+            log.warn("Gemini tried to set phase directly in state_delta — ignored. Value was: {}", delta.get("phase"));
+        }
 
         boolean transition = delta.path("phase_transition").asBoolean(false);
 

@@ -3,6 +3,8 @@ package com.patternsense.backend.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -16,6 +18,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GeminiService {
 
+    private static final Logger log = LoggerFactory.getLogger(GeminiService.class);
     private final ObjectMapper objectMapper;
 
     private static final String GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
@@ -68,6 +71,7 @@ public class GeminiService {
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
+            log.error("Gemini error — status: {} body: {}", response.statusCode(), response.body());
             throw new RuntimeException("Gemini API error: HTTP " + response.statusCode() + " — " + response.body());
         }
 
