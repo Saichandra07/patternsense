@@ -204,7 +204,7 @@ export default function Signup() {
             }}>
 
             <button onClick={handleGoogle}
-              className="w-full flex items-center justify-center gap-2.5 rounded-xl py-3 text-ink text-sm font-medium mb-4 hover:border-ink-muted transition-colors"
+              className="w-full flex items-center justify-center gap-2.5 rounded-xl py-3 text-ink text-sm font-medium mb-4 hover:border-ink-muted transition-all active:scale-[0.98]"
               style={{ background: '#18181F', border: '1px solid #232330' }}>
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                 <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
@@ -245,7 +245,7 @@ export default function Signup() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full text-white rounded-xl py-3 text-sm font-semibold transition-colors"
+                className="w-full text-white rounded-xl py-3 text-sm font-semibold transition-all active:scale-[0.98] disabled:active:scale-100"
                 style={{ background: '#7C3AED', opacity: loading ? 0.7 : 1 }}
               >
                 {loading ? 'Creating account…' : 'Get started free →'}

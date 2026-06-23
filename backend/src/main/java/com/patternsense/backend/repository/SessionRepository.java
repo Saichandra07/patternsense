@@ -12,4 +12,5 @@ public interface SessionRepository extends JpaRepository<Session, UUID> {
     Optional<Session> findFirstByProblemIdAndProblemBriefIsNotNull(UUID problemId);
     List<Session> findTop5ByUserIdAndStatusOrderByCompletedAtDesc(UUID userId, String status);
     List<Session> findByUserIdAndStatus(UUID userId, String status);
+    List<Session> findTop5ByUserIdOrderByCreatedAtDesc(UUID userId);
 }

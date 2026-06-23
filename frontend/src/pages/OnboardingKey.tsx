@@ -7,7 +7,11 @@ interface Props {
   onDone: () => void
 }
 
-function KeyVerifying() {
+type Provider = 'gemini' | 'groq'
+
+function KeyVerifying({ provider }: { provider: Provider }) {
+  const name = provider === 'groq' ? 'Groq' : 'Gemini'
+  const subtitle = provider === 'groq' ? 'Verifying your key with Groq' : 'Verifying your key with Google AI Studio'
   return (
     <div className="min-h-screen bg-page flex flex-col items-center justify-center relative overflow-hidden"
       style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
@@ -15,8 +19,8 @@ function KeyVerifying() {
         style={{ background: 'radial-gradient(ellipse at 50% 40%, rgba(124,58,237,0.14) 0%, transparent 65%)' }} />
       <div className="text-center relative z-10" style={{ maxWidth: '380px' }}>
         <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-6 text-white text-2xl">◆</div>
-        <h2 className="text-ink font-bold text-xl mb-2">Connecting to Gemini…</h2>
-        <p className="text-ink-secondary text-sm mb-7">Verifying your key with Google AI Studio</p>
+        <h2 className="text-ink font-bold text-xl mb-2">Connecting to {name}…</h2>
+        <p className="text-ink-secondary text-sm mb-7">{subtitle}</p>
         <div className="flex items-center justify-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-accent-text animate-bounce" style={{ animationDelay: '0ms' }} />
           <span className="w-2 h-2 rounded-full bg-accent-text animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -27,7 +31,9 @@ function KeyVerifying() {
   )
 }
 
-function KeySuccess({ onContinue }: { onContinue: () => void }) {
+function KeySuccess({ provider, onContinue }: { provider: Provider; onContinue: () => void }) {
+  const modelName = provider === 'groq' ? 'GPT-OSS 20B (Groq)' : 'Gemini 2.5 Flash'
+  const badge = provider === 'groq' ? 'GPT-OSS 20B · Connected' : 'Gemini 2.5 Flash · Connected'
   return (
     <div className="min-h-screen bg-page flex flex-col items-center justify-center relative overflow-hidden"
       style={{ fontFamily: 'Inter, -apple-system, sans-serif' }}>
@@ -45,20 +51,20 @@ function KeySuccess({ onContinue }: { onContinue: () => void }) {
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-5 text-xs font-medium text-success"
           style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)' }}>
           <div className="w-1.5 h-1.5 rounded-full bg-success" />
-          Gemini 2.5 Flash · Connected
+          {badge}
         </div>
 
         <h2 className="text-ink font-bold mb-3" style={{ fontSize: '26px', letterSpacing: '-0.5px' }}>
           AI connection established
         </h2>
         <p className="text-ink-secondary text-sm leading-relaxed mb-7">
-          PatternSense is now powered by your Gemini key — unlimited Socratic sessions, no cutoffs, fully personalized to your reasoning.
+          PatternSense is now powered by your {provider === 'groq' ? 'Groq' : 'Gemini'} key — unlimited Socratic sessions, no cutoffs, fully personalized to your reasoning.
         </p>
 
         <div className="rounded-xl p-4 mb-8 text-left"
           style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)' }}>
           {[
-            { label: 'Model', value: 'Gemini 2.5 Flash' },
+            { label: 'Model', value: modelName },
             { label: 'Status', value: 'Ready' },
             { label: 'Key security', value: 'AES-256 encrypted' },
           ].map(row => (
@@ -81,6 +87,7 @@ function KeySuccess({ onContinue }: { onContinue: () => void }) {
 }
 
 export default function OnboardingKey({ onDone }: Props) {
+  const [provider, setProvider] = useState<Provider>('gemini')
   const [key, setKey] = useState('')
   const [show, setShow] = useState(false)
   const [status, setStatus] = useState<'idle' | 'verifying' | 'success'>('idle')
@@ -93,7 +100,7 @@ export default function OnboardingKey({ onDone }: Props) {
     setStatus('verifying')
     setError('')
     try {
-      await api.post('/api/keys/save', { apiKey: trimmed })
+      await api.post('/api/keys/save', { apiKey: trimmed, provider })
       setStatus('success')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -102,8 +109,35 @@ export default function OnboardingKey({ onDone }: Props) {
     }
   }
 
-  if (status === 'verifying') return <KeyVerifying />
-  if (status === 'success') return <KeySuccess onContinue={onDone} />
+  if (status === 'verifying') return <KeyVerifying provider={provider} />
+  if (status === 'success') return <KeySuccess provider={provider} onContinue={onDone} />
+
+  const providerConfig = {
+    gemini: {
+      label: 'Gemini',
+      sublabel: '1,500 req/day free',
+      note: 'Great reasoning quality',
+      href: 'https://aistudio.google.com/apikey',
+      steps: [
+        { n: '1', text: <span>Go to <strong className="text-ink">Google AI Studio</strong> and sign in with your Google account</span>, link: 'https://aistudio.google.com/apikey' },
+        { n: '2', text: <span>Click <strong className="text-ink">"Get API Key"</strong> and create a new key — it's free</span> },
+        { n: '3', text: <span>Copy your key and paste it below</span> },
+      ],
+    },
+    groq: {
+      label: 'Groq',
+      sublabel: '1,000 req/day free',
+      note: 'No outages · LPU hardware',
+      href: 'https://console.groq.com/keys',
+      steps: [
+        { n: '1', text: <span>Go to <strong className="text-ink">Groq Console</strong> and sign up — it's free, email only</span>, link: 'https://console.groq.com/keys' },
+        { n: '2', text: <span>Click <strong className="text-ink">"Create API Key"</strong> and copy it</span> },
+        { n: '3', text: <span>Paste your key below</span> },
+      ],
+    },
+  }
+
+  const cfg = providerConfig[provider]
 
   return (
     <div className="min-h-screen bg-page flex flex-col">
@@ -128,18 +162,37 @@ export default function OnboardingKey({ onDone }: Props) {
             </div>
           </div>
 
-          <h1 className="text-ink text-3xl font-bold mb-2.5">Connect your Gemini key</h1>
-          <p className="text-ink-secondary text-sm leading-relaxed mb-9">
-            To give you full, uninterrupted Socratic sessions that never cut off mid-pattern, we use your own free Gemini API key.
+          <h1 className="text-ink text-3xl font-bold mb-2.5">Connect your AI key</h1>
+          <p className="text-ink-secondary text-sm leading-relaxed mb-6">
+            Choose a free AI provider below. Both are permanently free — pick whichever you prefer.
           </p>
 
+          {/* Provider selection */}
+          <div className="grid grid-cols-2 gap-3 mb-7">
+            {(['gemini', 'groq'] as Provider[]).map(p => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => { setProvider(p); setKey(''); setError('') }}
+                className={`text-left p-4 rounded-xl border transition-all ${
+                  provider === p
+                    ? 'border-accent bg-accent/5'
+                    : 'border-sep bg-surface hover:border-ink-muted'
+                }`}
+              >
+                <p className={`font-semibold text-sm mb-0.5 ${provider === p ? 'text-accent-text' : 'text-ink'}`}>
+                  {providerConfig[p].label}
+                </p>
+                <p className="text-ink-secondary text-xs">{providerConfig[p].sublabel}</p>
+                <p className="text-ink-muted text-xs mt-0.5">{providerConfig[p].note}</p>
+              </button>
+            ))}
+          </div>
+
+          {/* Steps for selected provider */}
           <div className="bg-surface border border-sep rounded-xl overflow-hidden mb-7">
-            {[
-              { n: '1', text: <span>Go to <strong className="text-ink">Google AI Studio</strong> and sign in with your Google account</span>, link: 'https://aistudio.google.com/app/apikey' },
-              { n: '2', text: <span>Click <strong className="text-ink">"Get API Key"</strong> and create a new key — it's completely free</span> },
-              { n: '3', text: <span>Copy your key and paste it below</span> },
-            ].map((step, i, arr) => (
-              <div key={step.n} className={`flex items-center gap-4 px-5 py-4 ${i < arr.length - 1 ? 'border-b border-sep' : ''}`}>
+            {cfg.steps.map((step, i) => (
+              <div key={step.n} className={`flex items-center gap-4 px-5 py-4 ${i < cfg.steps.length - 1 ? 'border-b border-sep' : ''}`}>
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center text-accent-text text-sm font-bold flex-shrink-0"
                   style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
                   {step.n}
@@ -156,7 +209,9 @@ export default function OnboardingKey({ onDone }: Props) {
           </div>
 
           <form onSubmit={handleSubmit}>
-            <p className="text-ink-secondary text-xs font-medium mb-2">Your Gemini API key</p>
+            <p className="text-ink-secondary text-xs font-medium mb-2">
+              Your {provider === 'groq' ? 'Groq' : 'Gemini'} API key
+            </p>
             <div className="relative mb-2.5">
               <input
                 type={show ? 'text' : 'password'}

@@ -2,7 +2,9 @@
 
 @theme inline {
   --color-page: #09090F;
+  --color-page-dark: #07070D;
   --color-surface: #111118;
+  --color-card: #11111A;
   --color-elevated: #18181F;
   --color-accent: #7C3AED;
   --color-accent-text: #A78BFA;
@@ -12,6 +14,7 @@
   --color-ink-secondary: #8B879E;
   --color-ink-muted: #4E4C5E;
   --color-sep: #232330;
+  --color-sep2: #27273A;
 }
 
 * {
@@ -24,4 +27,14 @@ body {
   color: #EEEDF8;
   font-family: Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* thin scrollbars globally */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #27273A; border-radius: 2px; }
+
+@keyframes dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-5px); }
 }

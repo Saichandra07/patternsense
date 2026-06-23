@@ -25,16 +25,49 @@ public class SessionController {
         return m != null ? m : e.getClass().getSimpleName();
     }
 
+    @GetMapping("/recent")
+    public ResponseEntity<?> recent(@AuthenticationPrincipal Jwt jwt) {
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            return ResponseEntity.ok(sessionService.getRecentSessions(userId));
+        } catch (Exception e) {
+            log.error("recent() failed", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", msg(e)));
+        }
+    }
+
+    @GetMapping("/{sessionId}/messages")
+    public ResponseEntity<?> getMessages(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId) {
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            return ResponseEntity.ok(sessionService.getSessionMessages(userId, sessionId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
+        } catch (Exception e) {
+            log.error("getMessages() failed for session {}", sessionId, e);
+            return ResponseEntity.internalServerError().body(Map.of("error", msg(e)));
+        }
+    }
+
     @PostMapping("/start")
     public ResponseEntity<Map<String, Object>> start(
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody Map<String, String> body) {
         try {
             UUID userId = UUID.fromString(jwt.getSubject());
-            String url = body.get("url");
-            if (url == null || url.isBlank())
-                return ResponseEntity.badRequest().body(Map.of("error", "url is required"));
-            return ResponseEntity.ok(sessionService.startSession(userId, url));
+            String url   = body.get("url");
+            String title = body.get("title");
+            String text  = body.get("text");
+
+            if (url != null && !url.isBlank()) {
+                return ResponseEntity.ok(sessionService.startSession(userId, url));
+            } else if (title != null && !title.isBlank() && text != null && !text.isBlank()) {
+                return ResponseEntity.ok(sessionService.startSessionFromText(userId, title.trim(), text.trim()));
+            } else {
+                return ResponseEntity.badRequest().body(Map.of("error", "Provide a LeetCode URL or a problem title + text"));
+            }
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
         } catch (Exception e) {
@@ -75,6 +108,22 @@ public class SessionController {
             return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
         } catch (Exception e) {
             log.error("end() failed for session {}", sessionId, e);
+            return ResponseEntity.internalServerError().body(Map.of("error", msg(e)));
+        }
+    }
+
+    @DeleteMapping("/{sessionId}")
+    public ResponseEntity<?> delete(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId) {
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            sessionService.deleteSession(userId, sessionId);
+            return ResponseEntity.ok(Map.of("deleted", true));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
+        } catch (Exception e) {
+            log.error("delete() failed for session {}", sessionId, e);
             return ResponseEntity.internalServerError().body(Map.of("error", msg(e)));
         }
     }

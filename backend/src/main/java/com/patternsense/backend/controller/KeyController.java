@@ -27,7 +27,8 @@ public class KeyController {
         }
         try {
             UUID userId = UUID.fromString(jwt.getSubject());
-            keyService.saveKey(userId, apiKey.trim());
+            String provider = body.getOrDefault("provider", "gemini");
+            keyService.saveKey(userId, apiKey.trim(), provider);
             return ResponseEntity.ok(Map.of("status", "saved"));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -54,5 +55,15 @@ public class KeyController {
         UUID userId = UUID.fromString(jwt.getSubject());
         boolean valid = keyService.validateStoredKey(userId);
         return ResponseEntity.ok(Map.of("valid", valid));
+    }
+
+    @GetMapping("/info")
+    public ResponseEntity<?> keyInfo(@AuthenticationPrincipal Jwt jwt) {
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            return ResponseEntity.ok(keyService.getKeyInfo(userId));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", "Failed to load key info"));
+        }
     }
 }

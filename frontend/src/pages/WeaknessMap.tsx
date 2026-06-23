@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import Nav from '../components/Nav'
 import api from '../lib/api'
 
 interface WeaknessEntry {
@@ -9,10 +8,6 @@ interface WeaknessEntry {
   recentGapNote: string | null
 }
 
-interface Props {
-  onBack: () => void
-  onLogout: () => void
-}
 
 function confidenceColor(score: number): string {
   if (score > 60) return 'bg-success'
@@ -31,7 +26,7 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function WeaknessMap({ onBack, onLogout }: Props) {
+export default function WeaknessMap() {
   const [weaknesses, setWeaknesses] = useState<WeaknessEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -45,24 +40,6 @@ export default function WeaknessMap({ onBack, onLogout }: Props) {
 
   return (
     <div className="min-h-screen bg-page flex flex-col">
-      <Nav
-        rightSlot={
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onBack}
-              className="text-ink-secondary text-sm hover:text-ink transition-colors"
-            >
-              ← Dashboard
-            </button>
-            <button
-              onClick={onLogout}
-              className="text-ink-muted text-sm hover:text-ink-secondary transition-colors"
-            >
-              Sign out
-            </button>
-          </div>
-        }
-      />
 
       <div className="flex-1 px-6 py-10 max-w-5xl mx-auto w-full">
         <div className="mb-8">

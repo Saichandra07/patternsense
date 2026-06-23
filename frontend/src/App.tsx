@@ -5,25 +5,36 @@ import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import OnboardingKey from './pages/OnboardingKey'
-import OnboardingMode from './pages/OnboardingMode'
 import Home from './pages/Home'
-import DashboardGuided from './pages/DashboardGuided'
 import SessionPage from './pages/SessionPage'
 import WeaknessMap from './pages/WeaknessMap'
 import Roadmap from './pages/Roadmap'
+import Settings from './pages/Settings'
+import Sidebar from './components/Sidebar'
 import LoadingScreen from './components/LoadingScreen'
 import type { Session } from '@supabase/supabase-js'
 
 type Screen =
   | 'loading' | 'landing' | 'login' | 'signup'
-  | 'onboarding-key' | 'onboarding-mode'
-  | 'home' | 'session' | 'weakness-map' | 'roadmap'
+  | 'onboarding-key'
+  | 'home' | 'session' | 'weakness-map' | 'roadmap' | 'settings'
+
+export type SessionSource =
+  | { type: 'url'; url: string }
+  | { type: 'paste'; title: string; text: string }
+  | {
+      type: 'resume'
+      sessionId: string
+      problem: { slug: string; title: string; difficulty: string; description: string; topicTags?: string[] }
+      messages: { role: 'user' | 'assistant'; content: string }[]
+      phase: number
+      sessionState: string
+    }
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [screen, setScreen] = useState<Screen>('loading')
-  const [userMode, setUserMode] = useState<string | null>(null)
-  const [sessionUrl, setSessionUrl] = useState<string>('')
+  const [sessionSource, setSessionSource] = useState<SessionSource>({ type: 'url', url: '' })
   const isInitialized = useRef(false)
 
   useEffect(() => {
@@ -60,7 +71,6 @@ function App() {
     try {
       await api.post('/api/users/sync')
       const { data } = await api.get('/api/users/profile')
-      setUserMode(data.mode)
 
       if (!data.hasKey) {
         setScreen('onboarding-key')
@@ -73,11 +83,7 @@ function App() {
         return
       }
 
-      if (!data.mode) {
-        setScreen('onboarding-mode')
-      } else {
-        setScreen('home')
-      }
+      setScreen('home')
     } catch {
       setScreen('login')
     }
@@ -85,12 +91,27 @@ function App() {
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    setUserMode(null)
     setScreen('login')
   }
 
   function startSession(url: string) {
-    setSessionUrl(url)
+    setSessionSource({ type: 'url', url })
+    setScreen('session')
+  }
+
+  function startSessionPaste(title: string, text: string) {
+    setSessionSource({ type: 'paste', title, text })
+    setScreen('session')
+  }
+
+  function startSessionResume(
+    sessionId: string,
+    problem: { slug: string; title: string; difficulty: string; description: string; topicTags?: string[] },
+    messages: { role: 'user' | 'assistant'; content: string }[],
+    phase: number,
+    sessionState: string
+  ) {
+    setSessionSource({ type: 'resume', sessionId, problem, messages, phase, sessionState })
     setScreen('session')
   }
 
@@ -101,67 +122,40 @@ function App() {
   if (screen === 'login') return <Login />
 
   if (screen === 'onboarding-key') {
-    return <OnboardingKey onDone={() => setScreen('onboarding-mode')} />
-  }
-
-  if (screen === 'onboarding-mode') {
-    return (
-      <OnboardingMode
-        onBack={() => setScreen('onboarding-key')}
-        onDone={(mode) => {
-          setUserMode(mode)
-          setScreen('home')
-        }}
-      />
-    )
-  }
-
-  if (screen === 'home') {
-    if (userMode === 'guided') {
-      return (
-        <DashboardGuided
-          onStart={startSession}
-          onLogout={handleLogout}
-          onWeaknessMap={() => setScreen('weakness-map')}
-          onRoadmap={() => setScreen('roadmap')}
-        />
-      )
-    }
-    return (
-      <Home
-        onStart={startSession}
-        onLogout={handleLogout}
-        onWeaknessMap={() => setScreen('weakness-map')}
-      />
-    )
+    return <OnboardingKey onDone={() => setScreen('home')} />
   }
 
   if (screen === 'session') {
     return (
       <SessionPage
-        url={sessionUrl}
+        source={sessionSource}
         onBack={() => setScreen('home')}
         onLogout={handleLogout}
       />
     )
   }
 
-  if (screen === 'weakness-map') {
+  if (['home', 'roadmap', 'weakness-map', 'settings'].includes(screen)) {
     return (
-      <WeaknessMap
-        onBack={() => setScreen('home')}
-        onLogout={handleLogout}
-      />
-    )
-  }
-
-  if (screen === 'roadmap') {
-    return (
-      <Roadmap
-        onBack={() => setScreen('home')}
-        onStart={startSession}
-        onLogout={handleLogout}
-      />
+      <div className="flex h-screen overflow-hidden bg-page">
+        <Sidebar
+          activeScreen={screen}
+          onNavigate={s => setScreen(s)}
+          onLogout={handleLogout}
+        />
+        <div className="flex-1 overflow-y-auto">
+          {screen === 'home' && (
+            <Home
+              onStart={startSession}
+              onStartPaste={startSessionPaste}
+              onResume={startSessionResume}
+            />
+          )}
+          {screen === 'roadmap' && <Roadmap onStart={startSession} />}
+          {screen === 'weakness-map' && <WeaknessMap />}
+          {screen === 'settings' && <Settings />}
+        </div>
+      </div>
     )
   }
 

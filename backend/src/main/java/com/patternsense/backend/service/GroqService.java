@@ -16,17 +16,14 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-public class GeminiService {
+public class GroqService {
 
-    private static final Logger log = LoggerFactory.getLogger(GeminiService.class);
+    private static final Logger log = LoggerFactory.getLogger(GroqService.class);
     private final ObjectMapper objectMapper;
 
-    private static final String GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+    private static final String GROQ_BASE = "https://api.groq.com/openai/v1/chat/completions";
+    private static final String GROQ_MODEL = "llama-3.3-70b-versatile";
 
-    /**
-     * Analyzes a problem once (called at session start). Returns a JSON string
-     * matching the ProblemBrief schema used by all session prompts.
-     */
     public String analyzeProblem(String title, String description, String apiKey) throws Exception {
         String prompt = """
                 You are building a Socratic DSA tutoring engine. Analyze this problem and return a JSON object.
@@ -47,26 +44,25 @@ public class GeminiService {
                 }
                 """.formatted(title, description);
 
-        return callGemini(prompt, apiKey);
+        return callGroq(prompt, apiKey);
     }
 
-    /**
-     * Sends a session-turn prompt. Expects Gemini to return JSON: {"message":"...","state_delta":{...}}
-     */
     public String sendMessage(String prompt, String apiKey) throws Exception {
-        return callGemini(prompt, apiKey);
+        return callGroq(prompt, apiKey);
     }
 
-    private String callGemini(String prompt, String apiKey) throws Exception {
+    private String callGroq(String prompt, String apiKey) throws Exception {
         String bodyJson = objectMapper.writeValueAsString(Map.of(
-            "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
-            "generationConfig", Map.of("responseMimeType", "application/json")
+            "model", GROQ_MODEL,
+            "messages", List.of(Map.of("role", "user", "content", prompt)),
+            "response_format", Map.of("type", "json_object")
         ));
 
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(GEMINI_BASE + "?key=" + apiKey))
+                .uri(URI.create(GROQ_BASE))
                 .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
                 .build();
 
@@ -79,19 +75,19 @@ public class GeminiService {
 
             boolean retryable = response.statusCode() == 503 || response.statusCode() == 429;
             if (!retryable || attempt == backoffSeconds.length) {
-                log.error("Gemini error — status: {} body: {}", response.statusCode(), response.body());
+                log.error("Groq error — status: {} body: {}", response.statusCode(), response.body());
                 if (response.statusCode() == 429) {
-                    throw new RuntimeException("quota exceeded: Your Gemini API daily quota is exhausted. It resets at midnight PST — or add a Groq key as an alternative provider.");
+                    throw new RuntimeException("quota exceeded: Your Groq API rate limit is exhausted. Wait a minute and try again, or switch to Gemini.");
                 }
-                throw new RuntimeException("Gemini API error: HTTP " + response.statusCode());
+                throw new RuntimeException("Groq API error: HTTP " + response.statusCode());
             }
 
-            log.warn("Gemini returned {} — retrying in {}s (attempt {}/{})",
+            log.warn("Groq returned {} — retrying in {}s (attempt {}/{})",
                 response.statusCode(), backoffSeconds[attempt], attempt + 1, backoffSeconds.length);
             Thread.sleep(backoffSeconds[attempt] * 1000L);
         }
 
         JsonNode root = objectMapper.readTree(response.body());
-        return root.at("/candidates/0/content/parts/0/text").asText();
+        return root.at("/choices/0/message/content").asText();
     }
 }

@@ -28,6 +28,7 @@ public class SessionService {
     private final KeyService keyService;
     private final LeetCodeService leetCodeService;
     private final GeminiService geminiService;
+    private final GroqService groqService;
     private final PromptBuilder promptBuilder;
     private final ObjectMapper objectMapper;
 
@@ -35,7 +36,7 @@ public class SessionService {
         "{\"phase\":1,\"phase1\":{\"comprehension_gaps\":[],\"confirmed_at_turn\":null}," +
         "\"phase2\":{\"user_approach\":\"\",\"user_reasoning\":\"\",\"approach_type\":null,\"active_tier\":1," +
         "\"tier1_turns\":0,\"stuck_count\":0,\"stuck_points\":[],\"used_stuck_button\":false," +
-        "\"needed_explanation\":false,\"confirmed_solved_at_turn\":null}," +
+        "\"needed_explanation\":false,\"approach_confirmed\":false,\"confirmed_solved_at_turn\":null}," +
         "\"phase3\":{\"pattern_confirmed\":false,\"variance_understood\":false,\"gap_note\":null}}";
 
     private static final String PHASE1_OPENER =
@@ -45,7 +46,24 @@ public class SessionService {
     @Transactional
     public Map<String, Object> startSession(UUID userId, String problemUrl) throws Exception {
         String apiKey = keyService.decryptKey(userId);
-        Problem problem = leetCodeService.fetchAndCache(problemUrl);
+        String provider = keyService.getProvider(userId);
+
+        Problem problem;
+        try {
+            problem = leetCodeService.fetchAndCache(problemUrl);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // StrictMode or concurrent request already committed this slug — read the committed row.
+            String slug = leetCodeService.extractSlug(problemUrl);
+            problem = problemRepository.findBySlug(slug)
+                .orElseThrow(() -> new RuntimeException("Race condition: problem not found after conflict: " + slug));
+        }
+
+        String desc = problem.getDescription();
+        if (desc == null || desc.isBlank() || "PREMIUM_NO_DESCRIPTION".equals(desc)) {
+            throw new IllegalArgumentException(
+                "PREMIUM_PROBLEM: This is a LeetCode Premium problem — the description isn't accessible. " +
+                "Copy the problem text from another site (GFG, NeetCode, etc.) and use 'Paste a Problem' instead.");
+        }
 
         String problemBrief = sessionRepository
             .findFirstByProblemIdAndProblemBriefIsNotNull(problem.getId())
@@ -53,7 +71,7 @@ public class SessionService {
             .orElse(null);
 
         if (problemBrief == null) {
-            problemBrief = geminiService.analyzeProblem(problem.getTitle(), problem.getDescription(), apiKey);
+            problemBrief = llmAnalyze(problem.getTitle(), problem.getDescription(), apiKey, provider);
         }
 
         Session session = new Session();
@@ -73,16 +91,84 @@ public class SessionService {
         opener.setCreatedAt(OffsetDateTime.now());
         messageRepository.save(opener);
 
+        List<String> signalKeywords = new ArrayList<>();
+        try {
+            JsonNode briefNode = objectMapper.readTree(problemBrief);
+            if (briefNode.has("signal_keywords")) {
+                briefNode.get("signal_keywords").forEach(n -> signalKeywords.add(n.asText()));
+            }
+        } catch (Exception ignored) {}
+
+        Map<String, Object> problemMap = new HashMap<>();
+        problemMap.put("slug", problem.getSlug());
+        problemMap.put("title", problem.getTitle());
+        problemMap.put("difficulty", problem.getDifficulty());
+        problemMap.put("description", problem.getDescription());
+        problemMap.put("topicTags", problem.getTopicTags() != null ? problem.getTopicTags() : new String[]{});
+
         Map<String, Object> result = new HashMap<>();
         result.put("sessionId", session.getId());
-        result.put("problem", Map.of(
-            "slug", problem.getSlug(),
-            "title", problem.getTitle(),
-            "difficulty", problem.getDifficulty(),
-            "description", problem.getDescription()
-        ));
+        result.put("problem", problemMap);
         result.put("firstMessage", PHASE1_OPENER);
         result.put("sessionState", INITIAL_STATE);
+        result.put("signalKeywords", signalKeywords);
+        return result;
+    }
+
+    @Transactional
+    @Transactional
+    public Map<String, Object> startSessionFromText(UUID userId, String title, String text) throws Exception {
+        String apiKey = keyService.decryptKey(userId);
+        String provider = keyService.getProvider(userId);
+
+        Problem problem = new Problem();
+        problem.setSlug("custom-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
+        problem.setTitle(title);
+        problem.setDescription(text);
+        problem.setSource("custom");
+        problem.setCreatedAt(OffsetDateTime.now());
+        problem = problemRepository.save(problem);
+
+        String problemBrief = llmAnalyze(title, text, apiKey, provider);
+
+        Session session = new Session();
+        session.setUserId(userId);
+        session.setProblemId(problem.getId());
+        session.setProblemBrief(problemBrief);
+        session.setSessionState(INITIAL_STATE);
+        session.setStatus("active");
+        session.setCreatedAt(OffsetDateTime.now());
+        session = sessionRepository.save(session);
+
+        Message opener = new Message();
+        opener.setSessionId(session.getId());
+        opener.setRole("assistant");
+        opener.setContent(PHASE1_OPENER);
+        opener.setTurnNumber(1);
+        opener.setCreatedAt(OffsetDateTime.now());
+        messageRepository.save(opener);
+
+        List<String> signalKeywords = new ArrayList<>();
+        try {
+            JsonNode briefNode = objectMapper.readTree(problemBrief);
+            if (briefNode.has("signal_keywords")) {
+                briefNode.get("signal_keywords").forEach(n -> signalKeywords.add(n.asText()));
+            }
+        } catch (Exception ignored) {}
+
+        Map<String, Object> problemMap = new HashMap<>();
+        problemMap.put("slug", problem.getSlug());
+        problemMap.put("title", problem.getTitle());
+        problemMap.put("difficulty", "custom");
+        problemMap.put("description", problem.getDescription());
+        problemMap.put("topicTags", new String[]{});
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("sessionId", session.getId());
+        result.put("problem", problemMap);
+        result.put("firstMessage", PHASE1_OPENER);
+        result.put("sessionState", INITIAL_STATE);
+        result.put("signalKeywords", signalKeywords);
         return result;
     }
 
@@ -109,17 +195,18 @@ public class SessionService {
         userMsg.setCreatedAt(OffsetDateTime.now());
         messageRepository.save(userMsg);
 
-        List<Message> recent = allMessages.size() > 6
-            ? allMessages.subList(allMessages.size() - 6, allMessages.size())
+        List<Message> recent = allMessages.size() > 12
+            ? allMessages.subList(allMessages.size() - 12, allMessages.size())
             : allMessages;
 
         JsonNode state = objectMapper.readTree(session.getSessionState());
         int phase = state.get("phase").asInt();
 
+        String provider = keyService.getProvider(userId);
         List<WeaknessMap> weaknesses = weaknessMapRepository.findByUserId(userId);
         String weaknessContext = buildWeaknessContext(weaknesses);
         String prompt = buildPrompt(phase, problem, session.getProblemBrief(), state, recent, content, weaknessContext);
-        String rawResponse = geminiService.sendMessage(prompt, apiKey);
+        String rawResponse = llmSend(prompt, apiKey, provider);
         log.info("Gemini raw response (phase {}): {}", phase, rawResponse);
 
         JsonNode response = objectMapper.readTree(rawResponse);
@@ -251,17 +338,18 @@ public class SessionService {
         p2.put("stuck_count", stuckCount);
 
         List<Message> allMessages = messageRepository.findBySessionIdOrderByTurnNumberAsc(sessionId);
-        List<Message> recent = allMessages.size() > 6
-            ? allMessages.subList(allMessages.size() - 6, allMessages.size())
+        List<Message> recent = allMessages.size() > 12
+            ? allMessages.subList(allMessages.size() - 12, allMessages.size())
             : allMessages;
 
         int phase = state.get("phase").asInt();
+        String stuckProvider = keyService.getProvider(userId);
         List<WeaknessMap> stuckWeaknesses = weaknessMapRepository.findByUserId(userId);
         String stuckWeaknessContext = buildWeaknessContext(stuckWeaknesses);
         String prompt = buildPrompt(phase, problem, session.getProblemBrief(), state, recent,
             "[User clicked 'I'm stuck' — provide a more direct hint or explanation]", stuckWeaknessContext);
 
-        String rawResponse = geminiService.sendMessage(prompt, apiKey);
+        String rawResponse = llmSend(prompt, apiKey, stuckProvider);
         JsonNode response = objectMapper.readTree(rawResponse);
         String assistantMessage = response.get("message").asText();
 
@@ -300,13 +388,85 @@ public class SessionService {
                     problemBrief, stateStr, recent, userMessage, stuckCount, hasApproach, hasReasoning, weaknessContext);
             }
             case 3 -> {
-                String userMode = state.path("phase2").path("needed_explanation").asBoolean(false)
-                    ? "guided" : "self_directed";
                 yield promptBuilder.phase3(problem.getTitle(), problemBrief, stateStr,
-                    recent, userMessage, userMode);
+                    recent, userMessage, "self_directed");
             }
             default -> throw new IllegalStateException("Unknown phase: " + phase);
         };
+    }
+
+    private String llmAnalyze(String title, String desc, String apiKey, String provider) throws Exception {
+        return "groq".equals(provider)
+            ? groqService.analyzeProblem(title, desc, apiKey)
+            : geminiService.analyzeProblem(title, desc, apiKey);
+    }
+
+    private String llmSend(String prompt, String apiKey, String provider) throws Exception {
+        return "groq".equals(provider)
+            ? groqService.sendMessage(prompt, apiKey)
+            : geminiService.sendMessage(prompt, apiKey);
+    }
+
+    @Transactional
+    public void deleteSession(UUID userId, UUID sessionId) {
+        Session session = sessionRepository.findByIdAndUserId(sessionId, userId)
+            .orElseThrow(() -> new IllegalArgumentException("Session not found or access denied"));
+        sessionRepository.delete(session);
+    }
+
+    public List<Map<String, Object>> getRecentSessions(UUID userId) throws Exception {
+        List<Session> sessions = sessionRepository.findTop5ByUserIdOrderByCreatedAtDesc(userId);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Session session : sessions) {
+            Optional<Problem> problemOpt = problemRepository.findById(session.getProblemId());
+            if (problemOpt.isEmpty()) continue;
+            Problem problem = problemOpt.get();
+
+            JsonNode state = objectMapper.readTree(session.getSessionState());
+            int phase = state.path("phase").asInt(1);
+
+            String pattern = null;
+            if (session.getProblemBrief() != null) {
+                try {
+                    JsonNode brief = objectMapper.readTree(session.getProblemBrief());
+                    pattern = brief.path("core_pattern").asText(null);
+                    if (pattern != null && pattern.isBlank()) pattern = null;
+                } catch (Exception ignored) {}
+            }
+
+            int messageCount = messageRepository.countBySessionId(session.getId());
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("sessionId", session.getId());
+            item.put("status", session.getStatus());
+            item.put("phase", phase);
+            item.put("problemSlug", problem.getSlug());
+            item.put("problemTitle", problem.getTitle());
+            item.put("difficulty", problem.getDifficulty());
+            item.put("description", problem.getDescription());
+            item.put("topicTags", problem.getTopicTags() != null ? problem.getTopicTags() : new String[]{});
+            item.put("pattern", pattern);
+            item.put("gapNote", null);
+            item.put("completedAt", session.getCompletedAt());
+            item.put("messageCount", messageCount);
+            item.put("sessionState", session.getSessionState());
+            result.add(item);
+        }
+        return result;
+    }
+
+    public List<Map<String, Object>> getSessionMessages(UUID userId, UUID sessionId) {
+        sessionRepository.findByIdAndUserId(sessionId, userId)
+            .orElseThrow(() -> new IllegalArgumentException("Session not found or access denied"));
+        List<Message> messages = messageRepository.findBySessionIdOrderByTurnNumberAsc(sessionId);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Message msg : messages) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("role", msg.getRole());
+            item.put("content", msg.getContent());
+            result.add(item);
+        }
+        return result;
     }
 
     private String buildWeaknessContext(List<WeaknessMap> weaknesses) {
@@ -353,8 +513,8 @@ public class SessionService {
             JsonNode d = delta.get("phase2");
             ObjectNode p2 = (ObjectNode) state.get("phase2");
             Set<String> allowed = Set.of("user_approach", "user_reasoning", "approach_type", "active_tier",
-                "tier1_turns", "stuck_count", "stuck_points", "used_stuck_button",
-                "needed_explanation", "confirmed_solved_at_turn");
+                "tier1_turns", "stuck_points", "used_stuck_button",
+                "needed_explanation", "approach_confirmed", "confirmed_solved_at_turn");
             d.fieldNames().forEachRemaining(f -> {
                 if (!allowed.contains(f)) throw new IllegalArgumentException("Rejected phase2 field: " + f);
             });
@@ -364,9 +524,11 @@ public class SessionService {
 
             if (d.has("approach_type")) {
                 String val = d.get("approach_type").asText();
-                if (!Set.of("refinable", "incompatible", "none").contains(val))
-                    throw new IllegalArgumentException("Invalid approach_type: " + val);
-                p2.put("approach_type", val);
+                if (Set.of("refinable", "incompatible", "none").contains(val)) {
+                    p2.put("approach_type", val);
+                } else {
+                    log.warn("Invalid approach_type '{}' — ignoring", val);
+                }
             }
 
             if (d.has("active_tier")) p2.set("active_tier", d.get("active_tier"));
@@ -377,11 +539,7 @@ public class SessionService {
                 if (proposed >= current) p2.put("tier1_turns", proposed);
             }
 
-            if (d.has("stuck_count")) {
-                int current = p2.path("stuck_count").asInt(0);
-                int proposed = d.get("stuck_count").asInt(0);
-                if (proposed >= current) p2.put("stuck_count", proposed);
-            }
+            // stuck_count is write-only via the stuck() endpoint — LLM cannot modify it
 
             if (d.has("stuck_points")) p2.set("stuck_points", d.get("stuck_points"));
 
@@ -389,6 +547,8 @@ public class SessionService {
                 p2.put("used_stuck_button", true);
             if (d.has("needed_explanation") && d.get("needed_explanation").asBoolean())
                 p2.put("needed_explanation", true);
+            if (d.has("approach_confirmed") && d.get("approach_confirmed").asBoolean())
+                p2.put("approach_confirmed", true);
 
             if (d.has("confirmed_solved_at_turn"))
                 p2.set("confirmed_solved_at_turn", d.get("confirmed_solved_at_turn"));

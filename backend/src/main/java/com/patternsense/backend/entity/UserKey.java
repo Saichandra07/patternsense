@@ -25,6 +25,9 @@ public class UserKey {
     @Column(nullable = false)
     private String iv;
 
+    @Column(nullable = false)
+    private String provider;  // "gemini" or "groq"
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 }

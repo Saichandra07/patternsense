@@ -16,7 +16,9 @@ import java.net.http.HttpResponse;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -28,20 +30,36 @@ public class KeyService {
     @Value("${ENCRYPTION_KEY}")
     private String encryptionKeyHex;
 
-    private void validateGeminiKey(String apiKey) throws Exception {
+    private void validateKey(String apiKey, String provider) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey))
-                .GET()
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new IllegalArgumentException("Invalid Gemini API key — please check and try again");
+        HttpRequest request;
+        if ("groq".equals(provider)) {
+            request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.groq.com/openai/v1/models"))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .GET()
+                    .build();
+        } else {
+            request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey))
+                    .GET()
+                    .build();
         }
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        int status = response.statusCode();
+        if (status == 200) return;
+        String providerName = "groq".equals(provider) ? "Groq" : "Gemini";
+        // 429 = quota exhausted — key is valid, just rate-limited; don't treat as bad key
+        if (status == 429) {
+            throw new RuntimeException(providerName + " API quota exhausted — wait for reset or switch providers");
+        }
+        // 401/403/other = truly invalid key
+        throw new IllegalArgumentException("Invalid " + providerName + " API key — please check and try again");
     }
 
-    public void saveKey(UUID userId, String rawApiKey) throws Exception {
-        validateGeminiKey(rawApiKey);
+    public void saveKey(UUID userId, String rawApiKey, String provider) throws Exception {
+        String safeProvider = Set.of("gemini", "groq").contains(provider) ? provider : "gemini";
+        validateKey(rawApiKey, safeProvider);
         byte[] keyBytes = HexFormat.of().parseHex(encryptionKeyHex);
         byte[] iv = new byte[16];
         new SecureRandom().nextBytes(iv);
@@ -55,8 +73,15 @@ public class KeyService {
         userKey.setUserId(userId);
         userKey.setEncryptedKey(hex.formatHex(encrypted));
         userKey.setIv(hex.formatHex(iv));
+        userKey.setProvider(safeProvider);
         userKey.setCreatedAt(OffsetDateTime.now());
         userKeyRepository.save(userKey);
+    }
+
+    public String getProvider(UUID userId) {
+        return userKeyRepository.findByUserId(userId)
+                .map(UserKey::getProvider)
+                .orElse("gemini");
     }
 
     public String decryptKey(UUID userId) throws Exception {
@@ -80,20 +105,25 @@ public class KeyService {
         return userKeyRepository.findByUserId(userId).isPresent();
     }
 
+    public Map<String, String> getKeyInfo(UUID userId) throws Exception {
+        UserKey userKey = userKeyRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalStateException("No API key found"));
+        String raw = decryptKey(userId);
+        String masked = raw.length() > 8
+                ? raw.substring(0, 4) + "••••••••" + raw.substring(raw.length() - 4)
+                : "••••••••••••";
+        return Map.of("provider", userKey.getProvider(), "maskedKey", masked);
+    }
+
     public boolean validateStoredKey(UUID userId) {
         try {
             String rawKey = decryptKey(userId);
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://generativelanguage.googleapis.com/v1beta/models?key=" + rawKey))
-                    .GET()
-                    .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                removeKey(userId);
-                return false;
-            }
+            String provider = getProvider(userId);
+            validateKey(rawKey, provider);
             return true;
+        } catch (IllegalArgumentException e) {
+            removeKey(userId);
+            return false;
         } catch (Exception e) {
             return false;
         }
