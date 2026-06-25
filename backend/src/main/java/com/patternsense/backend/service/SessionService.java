@@ -36,8 +36,14 @@ public class SessionService {
         "{\"phase\":1,\"phase1\":{\"comprehension_gaps\":[],\"confirmed_at_turn\":null}," +
         "\"phase2\":{\"user_approach\":\"\",\"user_reasoning\":\"\",\"approach_type\":null,\"active_tier\":1," +
         "\"tier1_turns\":0,\"stuck_count\":0,\"stuck_points\":[],\"used_stuck_button\":false," +
-        "\"needed_explanation\":false,\"approach_confirmed\":false,\"confirmed_solved_at_turn\":null}," +
+        "\"needed_explanation\":false,\"approach_confirmed\":false,\"confirmed_solved_at_turn\":null," +
+        "\"awaiting_comeback\":false,\"comeback_type\":null,\"phase3_via\":null}," +
         "\"phase3\":{\"pattern_confirmed\":false,\"variance_understood\":false,\"gap_note\":null}}";
+
+    private static final String PHASE3_DIRECT_OPENER =
+        "Nice work getting it to pass. Now let's make sure it actually sticks. " +
+        "You built a solution that works — what data structure did you use, " +
+        "and what does it uniquely give you that a plain array or HashMap couldn't?";
 
     private static final String PHASE1_OPENER =
         "Let's start by making sure you understand exactly what this problem is asking. " +
@@ -115,7 +121,6 @@ public class SessionService {
         return result;
     }
 
-    @Transactional
     @Transactional
     public Map<String, Object> startSessionFromText(UUID userId, String title, String text) throws Exception {
         String apiKey = keyService.decryptKey(userId);
@@ -195,8 +200,8 @@ public class SessionService {
         userMsg.setCreatedAt(OffsetDateTime.now());
         messageRepository.save(userMsg);
 
-        List<Message> recent = allMessages.size() > 12
-            ? allMessages.subList(allMessages.size() - 12, allMessages.size())
+        List<Message> recent = allMessages.size() > 8
+            ? allMessages.subList(allMessages.size() - 8, allMessages.size())
             : allMessages;
 
         JsonNode state = objectMapper.readTree(session.getSessionState());
@@ -338,8 +343,8 @@ public class SessionService {
         p2.put("stuck_count", stuckCount);
 
         List<Message> allMessages = messageRepository.findBySessionIdOrderByTurnNumberAsc(sessionId);
-        List<Message> recent = allMessages.size() > 12
-            ? allMessages.subList(allMessages.size() - 12, allMessages.size())
+        List<Message> recent = allMessages.size() > 8
+            ? allMessages.subList(allMessages.size() - 8, allMessages.size())
             : allMessages;
 
         int phase = state.get("phase").asInt();
@@ -377,19 +382,25 @@ public class SessionService {
                                String weaknessContext) throws Exception {
         String stateStr = objectMapper.writeValueAsString(state);
         return switch (phase) {
-            case 1 -> promptBuilder.phase1(problem.getTitle(), problem.getDescription(),
+            case 1 -> promptBuilder.phase1(problem.getTitle(),
                 problemBrief, stateStr, recent, userMessage);
             case 2 -> {
                 JsonNode p2 = state.get("phase2");
                 int stuckCount = p2.path("stuck_count").asInt(0);
                 boolean hasApproach = !p2.path("user_approach").asText("").isEmpty();
                 boolean hasReasoning = !p2.path("user_reasoning").asText("").isEmpty();
-                yield promptBuilder.phase2(problem.getTitle(), problem.getDescription(),
+                String comebackType = p2.path("comeback_type").asText(null);
+                if (comebackType != null && !comebackType.isBlank() && !"null".equals(comebackType)) {
+                    yield promptBuilder.phase2PostComeback(problem.getTitle(),
+                        problemBrief, stateStr, recent, userMessage, comebackType);
+                }
+                yield promptBuilder.phase2(problem.getTitle(),
                     problemBrief, stateStr, recent, userMessage, stuckCount, hasApproach, hasReasoning, weaknessContext);
             }
             case 3 -> {
+                String phase3Via = state.path("phase2").path("phase3_via").asText("direct");
                 yield promptBuilder.phase3(problem.getTitle(), problemBrief, stateStr,
-                    recent, userMessage, "self_directed");
+                    recent, userMessage, phase3Via);
             }
             default -> throw new IllegalStateException("Unknown phase: " + phase);
         };
@@ -405,6 +416,108 @@ public class SessionService {
         return "groq".equals(provider)
             ? groqService.sendMessage(prompt, apiKey)
             : geminiService.sendMessage(prompt, apiKey);
+    }
+
+    @Transactional
+    public Map<String, Object> comeback(UUID userId, UUID sessionId,
+                                        String type, String code, String description) throws Exception {
+        Session session = sessionRepository.findByIdAndUserId(sessionId, userId)
+            .orElseThrow(() -> new IllegalArgumentException("Session not found"));
+        if (!"active".equals(session.getStatus())) {
+            throw new IllegalStateException("Session is not active");
+        }
+
+        String apiKey = keyService.decryptKey(userId);
+        String provider = keyService.getProvider(userId);
+        Problem problem = problemRepository.findById(session.getProblemId())
+            .orElseThrow(() -> new IllegalStateException("Problem not found"));
+
+        ObjectNode state = (ObjectNode) objectMapper.readTree(session.getSessionState());
+        ObjectNode p2 = (ObjectNode) state.get("phase2");
+
+        List<Message> allMessages = messageRepository.findBySessionIdOrderByTurnNumberAsc(sessionId);
+        int nextTurn = allMessages.size() + 1;
+
+        if ("solved".equals(type)) {
+            p2.put("comeback_type", "solved");
+            p2.put("awaiting_comeback", false);
+            p2.put("phase3_via", "direct");
+            p2.put("approach_confirmed", true);
+            state.put("phase", 3);
+
+            String updatedState = objectMapper.writeValueAsString(state);
+            session.setSessionState(updatedState);
+            sessionRepository.save(session);
+
+            Message assistantMsg = new Message();
+            assistantMsg.setSessionId(sessionId);
+            assistantMsg.setRole("assistant");
+            assistantMsg.setContent(PHASE3_DIRECT_OPENER);
+            assistantMsg.setTurnNumber(nextTurn);
+            assistantMsg.setCreatedAt(OffsetDateTime.now());
+            messageRepository.save(assistantMsg);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", PHASE3_DIRECT_OPENER);
+            result.put("sessionState", updatedState);
+            result.put("complete", false);
+            return result;
+        }
+
+        String userApproach = p2.path("user_approach").asText("");
+        String problemBrief = session.getProblemBrief();
+
+        String prompt = switch (type) {
+            case "tle" -> promptBuilder.phase2ComebackTle(problem.getTitle(), problemBrief, description);
+            case "implementation" -> promptBuilder.phase2ComebackImplementation(
+                problem.getTitle(), problemBrief, code, description);
+            case "logic" -> promptBuilder.phase2ComebackLogic(
+                problem.getTitle(), problemBrief, userApproach, description);
+            default -> throw new IllegalArgumentException("Unknown comeback type: " + type);
+        };
+
+        String rawResponse = llmSend(prompt, apiKey, provider);
+        log.info("Comeback ({}) raw response: {}", type, rawResponse);
+
+        JsonNode response = objectMapper.readTree(rawResponse);
+        String assistantMessage = response.path("message").asText("");
+        if (assistantMessage.isBlank()) {
+            throw new RuntimeException("LLM returned unexpected response format");
+        }
+
+        // Apply type-specific state changes directly — don't rely on LLM to set routing fields
+        p2.put("comeback_type", type);
+        p2.put("awaiting_comeback", false);
+        p2.put("phase3_via", "implementation".equals(type) ? "code_guide" : "teach");
+
+        String updatedState = objectMapper.writeValueAsString(state);
+        session.setSessionState(updatedState);
+        sessionRepository.save(session);
+
+        // Save a user summary message so conversation history reflects the comeback
+        Message userSummary = new Message();
+        userSummary.setSessionId(sessionId);
+        userSummary.setRole("user");
+        String summaryContent = "[Returned from LeetCode: " + type +
+            (description != null && !description.isBlank() ? " — " + description : "") + "]";
+        userSummary.setContent(summaryContent);
+        userSummary.setTurnNumber(nextTurn);
+        userSummary.setCreatedAt(OffsetDateTime.now());
+        messageRepository.save(userSummary);
+
+        Message assistantMsg = new Message();
+        assistantMsg.setSessionId(sessionId);
+        assistantMsg.setRole("assistant");
+        assistantMsg.setContent(assistantMessage);
+        assistantMsg.setTurnNumber(nextTurn + 1);
+        assistantMsg.setCreatedAt(OffsetDateTime.now());
+        messageRepository.save(assistantMsg);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", assistantMessage);
+        result.put("sessionState", updatedState);
+        result.put("complete", false);
+        return result;
     }
 
     @Transactional
@@ -471,8 +584,12 @@ public class SessionService {
 
     private String buildWeaknessContext(List<WeaknessMap> weaknesses) {
         if (weaknesses.isEmpty()) return "(no patterns practiced yet)";
+        List<WeaknessMap> top2Weakest = weaknesses.stream()
+            .sorted(Comparator.comparing(WeaknessMap::getConfidenceScore))
+            .limit(2)
+            .toList();
         StringBuilder sb = new StringBuilder();
-        for (WeaknessMap w : weaknesses) {
+        for (WeaknessMap w : top2Weakest) {
             sb.append(w.getPattern()).append(": ").append(w.getConfidenceScore()).append("/100 | ");
         }
         String s = sb.toString();
@@ -514,7 +631,8 @@ public class SessionService {
             ObjectNode p2 = (ObjectNode) state.get("phase2");
             Set<String> allowed = Set.of("user_approach", "user_reasoning", "approach_type", "active_tier",
                 "tier1_turns", "stuck_points", "used_stuck_button",
-                "needed_explanation", "approach_confirmed", "confirmed_solved_at_turn");
+                "needed_explanation", "approach_confirmed", "confirmed_solved_at_turn",
+                "awaiting_comeback", "comeback_type", "phase3_via");
             d.fieldNames().forEachRemaining(f -> {
                 if (!allowed.contains(f)) throw new IllegalArgumentException("Rejected phase2 field: " + f);
             });
@@ -552,6 +670,15 @@ public class SessionService {
 
             if (d.has("confirmed_solved_at_turn"))
                 p2.set("confirmed_solved_at_turn", d.get("confirmed_solved_at_turn"));
+
+            // awaiting_comeback: LLM can set true (when sending user to LeetCode) or false
+            if (d.has("awaiting_comeback")) p2.set("awaiting_comeback", d.get("awaiting_comeback"));
+
+            // comeback_type and phase3_via: write-once from LLM (backend sets these directly in comeback())
+            if (d.has("comeback_type") && p2.path("comeback_type").isNull())
+                p2.set("comeback_type", d.get("comeback_type"));
+            if (d.has("phase3_via") && p2.path("phase3_via").isNull())
+                p2.set("phase3_via", d.get("phase3_via"));
         }
 
         if (delta.has("phase3")) {

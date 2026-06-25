@@ -128,6 +128,27 @@ public class SessionController {
         }
     }
 
+    @PostMapping("/{sessionId}/comeback")
+    public ResponseEntity<Map<String, Object>> comeback(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID sessionId,
+            @RequestBody ComebackRequest body) {
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            return ResponseEntity.ok(sessionService.comeback(userId, sessionId,
+                body.type(), body.code(), body.description()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", msg(e)));
+        } catch (Exception e) {
+            log.error("comeback() failed for session {}", sessionId, e);
+            return ResponseEntity.internalServerError().body(Map.of("error", msg(e)));
+        }
+    }
+
+    public record ComebackRequest(String type, String code, String description) {}
+
     @PostMapping("/{sessionId}/stuck")
     public ResponseEntity<Map<String, Object>> stuck(
             @AuthenticationPrincipal Jwt jwt,

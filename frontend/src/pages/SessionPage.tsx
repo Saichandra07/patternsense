@@ -171,6 +171,13 @@ export default function SessionPage({ source, onBack, onLogout }: Props) {
   const [complete, setComplete]         = useState(false)
   const [endData, setEndData]           = useState<EndData | null>(null)
   const [quotaError, setQuotaError]     = useState(false)
+  const [awaitingComeback, setAwaitingComeback] = useState(false)
+  const [comebackStep, setComebackStep] = useState<1 | 2 | 3 | 4>(1)
+  const [comebackPath, setComebackPath] = useState<null | 'tle' | 'wa'>(null)
+  const [comebackWaType, setComebackWaType] = useState<null | 'some' | 'all'>(null)
+  const [comebackCode, setComebackCode] = useState('')
+  const [comebackDesc, setComebackDesc] = useState('')
+  const [comebackLoading, setComebackLoading] = useState(false)
 
   const scrollRef  = useRef<HTMLDivElement>(null)
   const startedRef = useRef(false)
@@ -187,6 +194,7 @@ export default function SessionPage({ source, onBack, onLogout }: Props) {
       try {
         const s = JSON.parse(source.sessionState)
         setHintsUsed(s.phase2?.stuck_count ?? 0)
+        setAwaitingComeback(s.phase2?.awaiting_comeback ?? false)
       } catch {}
       setLoading(false)
       return
@@ -230,6 +238,7 @@ export default function SessionPage({ source, onBack, onLogout }: Props) {
       const s = JSON.parse(stateStr)
       setPhase(s.phase ?? 1)
       setHintsUsed(s.phase2?.stuck_count ?? 0)
+      setAwaitingComeback(s.phase2?.awaiting_comeback ?? false)
     } catch {}
   }
 
@@ -281,6 +290,41 @@ export default function SessionPage({ source, onBack, onLogout }: Props) {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSend() }
+  }
+
+  async function handleComeback(type: 'solved' | 'tle' | 'implementation' | 'logic') {
+    if (comebackLoading) return
+    setComebackLoading(true)
+    try {
+      const body: { type: string; code?: string; description?: string } = { type }
+      if (comebackDesc.trim()) body.description = comebackDesc.trim()
+      if (comebackCode.trim()) body.code = comebackCode.trim()
+      const { data } = await api.post(`/api/session/${sessionId}/comeback`, body)
+      setMessages(m => [...m, { role: 'assistant', content: data.message }])
+      syncState(data.sessionState)
+      setComebackStep(1)
+      setComebackPath(null)
+      setComebackWaType(null)
+      setComebackCode('')
+      setComebackDesc('')
+      if (data.complete) {
+        const { data: end } = await api.post(`/api/session/${sessionId}/end`)
+        setEndData(end)
+        setComplete(true)
+      }
+    } catch (err: unknown) {
+      const raw = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? ''
+      if (raw.includes('429') || raw.toLowerCase().includes('quota') || raw.toLowerCase().includes('rate limit')) {
+        setQuotaError(true)
+      } else {
+        setMessages(m => [...m, { role: 'assistant', content: llmErrorMessage(raw) }])
+        setAwaitingComeback(false)
+        setComebackStep(1)
+        setComebackPath(null)
+      }
+    } finally {
+      setComebackLoading(false)
+    }
   }
 
   // ── Loading ──
@@ -449,7 +493,7 @@ export default function SessionPage({ source, onBack, onLogout }: Props) {
               </div>
             ))}
 
-            {(sending || stuckLoading) && (
+            {(sending || stuckLoading || comebackLoading) && (
               <div style={{ display: 'flex', gap: 9 }}>
                 <div style={{ width: 26, height: 26, borderRadius: 7, background: '#7C3AED', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'white', marginTop: 17, flexShrink: 0, boxShadow: '0 0 8px rgba(124,58,237,0.3)' }}>◆</div>
                 <div style={{ marginTop: 17 }}><TypingDots /></div>
@@ -457,7 +501,7 @@ export default function SessionPage({ source, onBack, onLogout }: Props) {
             )}
           </div>
 
-          {/* Editor-style input / quota error */}
+          {/* Editor-style input / quota error / comeback UI */}
           {quotaError ? (
             <div style={{ padding: '16px 18px', borderTop: '1px solid #27273A', background: 'rgba(24,24,31,0.7)', flexShrink: 0 }}>
               <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -472,6 +516,123 @@ export default function SessionPage({ source, onBack, onLogout }: Props) {
                   Go to Settings →
                 </button>
               </div>
+            </div>
+          ) : awaitingComeback ? (
+            <div style={{ padding: '14px 16px', borderTop: '1px solid #27273A', background: 'rgba(24,24,31,0.7)', backdropFilter: 'blur(8px)', flexShrink: 0 }}>
+              {/* LeetCode link */}
+              {problem?.slug && !problem.slug.startsWith('custom-') && (
+                <a
+                  href={`https://leetcode.com/problems/${problem.slug}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#A78BFA', background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.18)', borderRadius: 6, padding: '4px 10px', textDecoration: 'none', marginBottom: 12, fontWeight: 500 }}
+                >
+                  Open on LeetCode ↗
+                </a>
+              )}
+
+              {/* Step 1: Solved vs Stuck */}
+              {comebackStep === 1 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 11, color: '#4E4C5E', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>How did it go?</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => handleComeback('solved')}
+                      disabled={comebackLoading}
+                      style={{ flex: 1, background: 'rgba(16,185,129,0.07)', color: '#10B981', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 8, padding: '9px 0', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: comebackLoading ? 0.4 : 1 }}
+                    >
+                      I solved it ✓
+                    </button>
+                    <button
+                      onClick={() => setComebackStep(2)}
+                      disabled={comebackLoading}
+                      style={{ flex: 1, background: 'rgba(245,158,11,0.07)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 8, padding: '9px 0', fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: comebackLoading ? 0.4 : 1 }}
+                    >
+                      I got stuck
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: TLE vs Wrong Answer */}
+              {comebackStep === 2 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 11, color: '#4E4C5E', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>What happened?</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => { setComebackPath('tle'); setComebackStep(4) }}
+                      style={{ flex: 1, background: '#18181F', color: '#8B879E', border: '1px solid #27273A', borderRadius: 8, padding: '9px 0', fontFamily: 'Inter, sans-serif', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}
+                    >
+                      Too slow — TLE
+                    </button>
+                    <button
+                      onClick={() => { setComebackPath('wa'); setComebackStep(3) }}
+                      style={{ flex: 1, background: '#18181F', color: '#8B879E', border: '1px solid #27273A', borderRadius: 8, padding: '9px 0', fontFamily: 'Inter, sans-serif', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}
+                    >
+                      Wrong answer / Error
+                    </button>
+                  </div>
+                  <button onClick={() => setComebackStep(1)} style={{ background: 'none', border: 'none', color: '#4E4C5E', fontSize: 11, cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit' }}>← Back</button>
+                </div>
+              )}
+
+              {/* Step 3: Some tests pass vs All fail */}
+              {comebackStep === 3 && comebackPath === 'wa' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 11, color: '#4E4C5E', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>How many tests fail?</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => { setComebackWaType('some'); setComebackStep(4) }}
+                      style={{ flex: 1, background: '#18181F', color: '#8B879E', border: '1px solid #27273A', borderRadius: 8, padding: '9px 0', fontFamily: 'Inter, sans-serif', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}
+                    >
+                      Some tests pass
+                    </button>
+                    <button
+                      onClick={() => { setComebackWaType('all'); setComebackStep(4) }}
+                      style={{ flex: 1, background: '#18181F', color: '#8B879E', border: '1px solid #27273A', borderRadius: 8, padding: '9px 0', fontFamily: 'Inter, sans-serif', fontSize: 12.5, fontWeight: 500, cursor: 'pointer' }}
+                    >
+                      All tests fail
+                    </button>
+                  </div>
+                  <button onClick={() => setComebackStep(2)} style={{ background: 'none', border: 'none', color: '#4E4C5E', fontSize: 11, cursor: 'pointer', textAlign: 'left', padding: 0, fontFamily: 'inherit' }}>← Back</button>
+                </div>
+              )}
+
+              {/* Step 4: Details form */}
+              {comebackStep === 4 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {comebackPath === 'wa' && (
+                    <textarea
+                      value={comebackCode}
+                      onChange={e => setComebackCode(e.target.value)}
+                      placeholder="Paste your code here (optional)"
+                      rows={3}
+                      style={{ width: '100%', background: '#18181F', border: '1px solid #27273A', color: '#EEEDF8', fontFamily: 'monospace', fontSize: 11.5, padding: '8px 10px', resize: 'none', outline: 'none', borderRadius: 7, lineHeight: 1.5, boxSizing: 'border-box' }}
+                    />
+                  )}
+                  <textarea
+                    value={comebackDesc}
+                    onChange={e => setComebackDesc(e.target.value)}
+                    placeholder="Where exactly did you get stuck?"
+                    rows={2}
+                    style={{ width: '100%', background: '#18181F', border: '1px solid #27273A', color: '#EEEDF8', fontFamily: 'Inter, sans-serif', fontSize: 12.5, padding: '8px 10px', resize: 'none', outline: 'none', borderRadius: 7, lineHeight: 1.5, boxSizing: 'border-box' }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <button onClick={() => setComebackStep(comebackPath === 'tle' ? 2 : 3)} style={{ background: 'none', border: 'none', color: '#4E4C5E', fontSize: 11, cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}>← Back</button>
+                    <button
+                      onClick={() => {
+                        const type = comebackPath === 'tle' ? 'tle'
+                          : comebackWaType === 'some' ? 'implementation' : 'logic'
+                        handleComeback(type as 'tle' | 'implementation' | 'logic')
+                      }}
+                      disabled={comebackLoading}
+                      style={{ background: '#7C3AED', color: 'white', border: 'none', borderRadius: 8, padding: '7px 18px', fontFamily: 'Inter, sans-serif', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 10px rgba(124,58,237,0.3)', opacity: comebackLoading ? 0.4 : 1 }}
+                    >
+                      {comebackLoading ? 'Thinking…' : 'Submit →'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ padding: '12px 16px 14px', borderTop: '1px solid #27273A', background: 'rgba(24,24,31,0.7)', backdropFilter: 'blur(8px)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 9 }}>
